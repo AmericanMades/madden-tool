@@ -1,29 +1,54 @@
 // app/api/export/[username]/route.js
 //
-// FIXED: in recent Next.js versions (15+), `params` in route handlers
-// is a Promise now, not a plain object — it has to be awaited before
-// you can read properties off it. That's why username showed as
-// "undefined": `{ username } = params` was destructuring the Promise
-// itself, which has no `.username` property, instead of the resolved
-// value.
+// IMPORTANT CHANGE: the previous version relied on writing a file to
+// disk as the way to inspect exported data. That works fine locally,
+// but WON'T work once deployed to Vercel (or any serverless
+// platform) — those environments don't keep files written during one
+// request around for the next one. Any file this wrote would just
+// disappear.
 //
-// Route shape: /api/export/<username> — use any username you want
-// when entering the URL in the Companion App, e.g. /api/export/taylor.
+// Fixed by making console.log the PRIMARY way to inspect data now —
+// Vercel captures everything logged during a request in its
+// dashboard (Project -> Deployments -> your deployment -> Runtime
+// Logs), and that persists reliably. The local file write is still
+// attempted too (wrapped so it can't crash anything if it fails)
+// since it's convenient for local dev testing, but don't rely on it
+// once this is deployed.
 
 import fs from "fs";
 import path from "path";
 
 const EXPORTS_DIR = path.join(process.cwd(), "data", "exports");
 
-function ensureExportsDir() {
-  if (!fs.existsSync(EXPORTS_DIR)) {
-    fs.mkdirSync(EXPORTS_DIR, { recursive: true });
+const LOG_CHUNK_SIZE = 3000;
+
+function logInChunks(label, text) {
+  if (text.length <= LOG_CHUNK_SIZE) {
+    console.log(`${label}: ${text}`);
+    return;
+  }
+  const totalChunks = Math.ceil(text.length / LOG_CHUNK_SIZE);
+  for (let i = 0; i < totalChunks; i++) {
+    const chunk = text.slice(i * LOG_CHUNK_SIZE, (i + 1) * LOG_CHUNK_SIZE);
+    console.log(`${label} [chunk ${i + 1}/${totalChunks}]: ${chunk}`);
+  }
+}
+
+function tryWriteLocalFile(username, timestamp, content) {
+  try {
+    if (!fs.existsSync(EXPORTS_DIR)) {
+      fs.mkdirSync(EXPORTS_DIR, { recursive: true });
+    }
+    const filename = `${username}_${timestamp}.json`;
+    fs.writeFileSync(path.join(EXPORTS_DIR, filename), content, "utf-8");
+    return filename;
+  } catch {
+    return null;
   }
 }
 
 export async function POST(request, context) {
   const { username } = await context.params;
-
   const rawBody = await request.text();
 
   let parsed = null;
@@ -32,27 +57,27 @@ export async function POST(request, context) {
     parsed = JSON.parse(rawBody);
     isValidJson = true;
   } catch {
-    // Not JSON, or malformed — still saved as raw text below.
+    // Not JSON, or malformed — still logged/saved as raw text below.
   }
 
-  ensureExportsDir();
-
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const filename = `${username}_${timestamp}.json`;
-  const filepath = path.join(EXPORTS_DIR, filename);
-
   const toSave = isValidJson ? JSON.stringify(parsed, null, 2) : rawBody;
 
-  fs.writeFileSync(filepath, toSave, "utf-8");
+  const savedFilename = tryWriteLocalFile(username, timestamp, toSave);
 
-  console.log(`[madden-export] Received export for "${username}"`);
-  console.log(`[madden-export] Saved to: data/exports/${filename}`);
+  console.log(`[madden-export] ===== Received export for "${username}" =====`);
   console.log(`[madden-export] Body size: ${rawBody.length} bytes`);
   console.log(`[madden-export] Valid JSON: ${isValidJson}`);
+  console.log(`[madden-export] Content-Type header: ${request.headers.get("content-type")}`);
+  if (savedFilename) {
+    console.log(`[madden-export] Also saved locally to: data/exports/${savedFilename}`);
+  }
   if (isValidJson && parsed && typeof parsed === "object") {
     console.log(`[madden-export] Top-level keys: ${Object.keys(parsed).join(", ")}`);
   }
-  console.log(`[madden-export] Content-Type header: ${request.headers.get("content-type")}`);
+
+  logInChunks("[madden-export] RAW BODY", toSave);
+  console.log(`[madden-export] ===== End of export =====`);
 
   return Response.json({ status: "ok", received: rawBody.length });
 }
