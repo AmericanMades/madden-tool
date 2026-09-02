@@ -64,22 +64,19 @@ function logInChunks(label, text, chunkSize = 3000) {
   );
 
   for (let i = 0; i < totalChunks; i++) {
-    const chunk = text.slice(
-      i * chunkSize,
-      (i + 1) * chunkSize
-    );
-
     console.log(
       `${label} [${i + 1}/${totalChunks}]`,
-      chunk
+      text.slice(
+        i * chunkSize,
+        (i + 1) * chunkSize
+      )
     );
   }
 }
 
 async function handleMaddenRequest(
   request,
-  context,
-  requireBody = false
+  context
 ) {
   try {
     const { username, segments = [] } =
@@ -89,10 +86,6 @@ async function handleMaddenRequest(
       parseMaddenPath(segments);
 
     const url = new URL(request.url);
-
-    // -----------------------------------------
-    // READ RAW REQUEST BODY
-    // -----------------------------------------
 
     let rawBuffer = new ArrayBuffer(0);
 
@@ -113,10 +106,6 @@ async function handleMaddenRequest(
 
     const bytes =
       new Uint8Array(rawBuffer);
-
-    // -----------------------------------------
-    // LOG REQUEST
-    // -----------------------------------------
 
     console.log(
       "========================================"
@@ -214,16 +203,12 @@ async function handleMaddenRequest(
       bytes.length
     );
 
-    // -----------------------------------------
-    // REJECT EMPTY EXPORTS
-    // -----------------------------------------
-
-    if (
-      requireBody &&
-      bytes.length === 0
-    ) {
-      console.error(
-        "[MADDEN] EMPTY EXPORT — rejecting request"
+    // Important:
+    // Madden is currently sending bodyless requests.
+    // We log them but still return 200 so the export sequence continues.
+    if (bytes.length === 0) {
+      console.warn(
+        "[MADDEN] EMPTY BODY — accepting request so export can continue"
       );
 
       console.log(
@@ -234,56 +219,61 @@ async function handleMaddenRequest(
         "========================================"
       );
 
+      if (request.method === "HEAD") {
+        return new Response(null, {
+          status: 200,
+          headers: CORS_HEADERS,
+        });
+      }
+
       return Response.json(
         {
-          success: false,
-          status: "error",
-          error: "EMPTY_EXPORT",
-          message:
-            "No Madden export data was received.",
+          success: true,
+          status: "ok",
+          warning: "EMPTY_BODY",
           received: 0,
 
+          username,
+
           route: {
-            username,
             platform:
               routeInfo.platform,
+
             leagueId:
               routeInfo.leagueId,
+
             type:
               routeInfo.type,
+
             seasonType:
               routeInfo.seasonType,
+
             week:
               routeInfo.week,
+
             statType:
               routeInfo.statType,
           },
         },
         {
-          status: 400,
+          status: 200,
           headers: CORS_HEADERS,
         }
       );
     }
 
-    // -----------------------------------------
-    // DECODE BODY
-    // -----------------------------------------
-
     let rawText = "";
 
-    if (bytes.length > 0) {
-      try {
-        rawText =
-          new TextDecoder(
-            "utf-8"
-          ).decode(bytes);
-      } catch (error) {
-        console.error(
-          "[MADDEN] UTF-8 decode failed:",
-          error
-        );
-      }
+    try {
+      rawText =
+        new TextDecoder(
+          "utf-8"
+        ).decode(bytes);
+    } catch (error) {
+      console.error(
+        "[MADDEN] UTF-8 decode failed:",
+        error
+      );
     }
 
     let parsedJson = null;
@@ -310,17 +300,12 @@ async function handleMaddenRequest(
       validJson
     );
 
-    // -----------------------------------------
-    // LOG BODY
-    // -----------------------------------------
-
     if (
       validJson &&
       parsedJson !== null
     ) {
       if (
-        typeof parsedJson ===
-        "object"
+        typeof parsedJson === "object"
       ) {
         console.log(
           "[MADDEN] Top-level keys:",
@@ -364,10 +349,6 @@ async function handleMaddenRequest(
       "========================================"
     );
 
-    // -----------------------------------------
-    // SUCCESS RESPONSE
-    // -----------------------------------------
-
     if (
       request.method === "HEAD"
     ) {
@@ -381,7 +362,6 @@ async function handleMaddenRequest(
       {
         success: true,
         status: "ok",
-
         received:
           bytes.length,
 
@@ -444,18 +424,13 @@ async function handleMaddenRequest(
   }
 }
 
-// ==================================================
-// HTTP METHODS
-// ==================================================
-
 export async function POST(
   request,
   context
 ) {
   return handleMaddenRequest(
     request,
-    context,
-    true
+    context
   );
 }
 
@@ -465,8 +440,7 @@ export async function PUT(
 ) {
   return handleMaddenRequest(
     request,
-    context,
-    true
+    context
   );
 }
 
@@ -476,8 +450,7 @@ export async function PATCH(
 ) {
   return handleMaddenRequest(
     request,
-    context,
-    true
+    context
   );
 }
 
@@ -487,8 +460,7 @@ export async function DELETE(
 ) {
   return handleMaddenRequest(
     request,
-    context,
-    false
+    context
   );
 }
 
@@ -498,8 +470,7 @@ export async function GET(
 ) {
   return handleMaddenRequest(
     request,
-    context,
-    false
+    context
   );
 }
 
@@ -509,8 +480,7 @@ export async function HEAD(
 ) {
   return handleMaddenRequest(
     request,
-    context,
-    false
+    context
   );
 }
 
