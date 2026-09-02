@@ -2,173 +2,152 @@
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Methods":
+    "GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS",
   "Access-Control-Allow-Headers": "*",
 };
 
 function parseMaddenPath(segments = []) {
-  const result = {
+  return {
     platform: segments[0] || null,
     leagueId: segments[1] || null,
-    type: null,
-    seasonType: null,
-    week: null,
-    statType: null,
+    type: segments[2] || null,
+    seasonType:
+      segments[2] === "week" ? segments[3] || null : null,
+    week:
+      segments[2] === "week" ? segments[4] || null : null,
+    statType:
+      segments[2] === "week"
+        ? segments[5] || null
+        : segments[3] || null,
     rawSegments: segments,
   };
-
-  // Example:
-  // xbsx/2207259/standings
-  if (segments[2] === "standings") {
-    result.type = "standings";
-    return result;
-  }
-
-  // Example:
-  // xbsx/2207259/freeagents/roster
-  if (segments[2] === "freeagents") {
-    result.type = "freeagents";
-    result.statType = segments[3] || null;
-    return result;
-  }
-
-  // Example:
-  // xbsx/2207259/week/reg/2/kicking
-  if (segments[2] === "week") {
-    result.type = "week";
-    result.seasonType = segments[3] || null;
-    result.week = segments[4] || null;
-    result.statType = segments[5] || null;
-    return result;
-  }
-
-  // Handles other Madden endpoints such as:
-  // xbsx/2207259/leagueteams
-  result.type = segments[2] || "unknown";
-
-  return result;
 }
 
-function logBodyInChunks(text, chunkSize = 3000) {
+function safeHeaders(request) {
+  const headers = Object.fromEntries(
+    request.headers.entries()
+  );
+
+  // Don't dump sensitive/internal Vercel auth tokens into logs.
+  const hidden = [
+    "authorization",
+    "x-vercel-oidc-token",
+    "x-vercel-proxy-signature",
+    "x-vercel-sc-headers",
+  ];
+
+  for (const name of hidden) {
+    if (headers[name]) {
+      headers[name] = "[REDACTED]";
+    }
+  }
+
+  return headers;
+}
+
+function logInChunks(label, text, chunkSize = 3000) {
   if (!text) {
-    console.log("[MADDEN RAW BODY] <EMPTY>");
+    console.log(`${label} <EMPTY>`);
     return;
   }
 
-  if (text.length <= chunkSize) {
-    console.log("[MADDEN RAW BODY]", text);
-    return;
-  }
+  const total = Math.ceil(text.length / chunkSize);
 
-  const totalChunks = Math.ceil(text.length / chunkSize);
-
-  for (let i = 0; i < totalChunks; i++) {
-    const chunk = text.slice(
-      i * chunkSize,
-      (i + 1) * chunkSize
-    );
-
+  for (let i = 0; i < total; i++) {
     console.log(
-      `[MADDEN RAW BODY ${i + 1}/${totalChunks}]`,
-      chunk
+      `${label} [${i + 1}/${total}]`,
+      text.slice(
+        i * chunkSize,
+        (i + 1) * chunkSize
+      )
     );
   }
 }
 
-export async function POST(request, context) {
+async function handleMaddenRequest(request, context) {
   try {
-    const { username, segments } = await context.params;
+    const { username, segments = [] } =
+      await context.params;
 
     const routeInfo = parseMaddenPath(segments);
-
-    // Get complete URL information
     const url = new URL(request.url);
 
-    // Capture headers
-    const headers = Object.fromEntries(
-      request.headers.entries()
-    );
+    let rawBuffer = new ArrayBuffer(0);
 
-    // Capture query parameters
-    const queryParams = Object.fromEntries(
-      url.searchParams.entries()
-    );
-
-    // Read the complete body
-    const rawBody = await request.text();
-
-    // Try parsing body as JSON
-    let parsedBody = null;
-    let isJson = false;
-
-    if (rawBody.length > 0) {
+    // HEAD requests cannot have/use a response body
+    if (request.method !== "HEAD") {
       try {
-        parsedBody = JSON.parse(rawBody);
-        isJson = true;
-      } catch {
-        // Madden may send something other than JSON.
+        rawBuffer = await request.arrayBuffer();
+      } catch (error) {
+        console.error(
+          "[MADDEN] Failed reading request body:",
+          error
+        );
       }
     }
 
-    // ============================================
-    // REQUEST INFORMATION
-    // ============================================
+    const bytes = new Uint8Array(rawBuffer);
+
+    let rawText = "";
+
+    if (bytes.length > 0) {
+      try {
+        rawText = new TextDecoder("utf-8").decode(bytes);
+      } catch {
+        rawText = "";
+      }
+    }
+
+    let parsedJson = null;
+    let validJson = false;
+
+    if (rawText) {
+      try {
+        parsedJson = JSON.parse(rawText);
+        validJson = true;
+      } catch {
+        // Not JSON.
+      }
+    }
 
     console.log("========================================");
-    console.log("[MADDEN EXPORT RECEIVED]");
+    console.log("[MADDEN REQUEST RECEIVED]");
 
     console.log("[MADDEN] Method:", request.method);
     console.log("[MADDEN] URL:", request.url);
 
     console.log("[MADDEN] Username:", username);
-
     console.log(
       "[MADDEN] Platform:",
       routeInfo.platform
     );
-
     console.log(
       "[MADDEN] League ID:",
       routeInfo.leagueId
     );
-
-    console.log(
-      "[MADDEN] Type:",
-      routeInfo.type
-    );
-
+    console.log("[MADDEN] Type:", routeInfo.type);
     console.log(
       "[MADDEN] Season Type:",
       routeInfo.seasonType
     );
-
-    console.log(
-      "[MADDEN] Week:",
-      routeInfo.week
-    );
-
+    console.log("[MADDEN] Week:", routeInfo.week);
     console.log(
       "[MADDEN] Stat Type:",
       routeInfo.statType
     );
-
-    console.log(
-      "[MADDEN] Segments:",
-      routeInfo.rawSegments
-    );
-
-    // ============================================
-    // HTTP INFORMATION
-    // ============================================
-
-    console.log(
-      "[MADDEN] Headers:",
-      headers
-    );
+    console.log("[MADDEN] Segments:", segments);
 
     console.log(
       "[MADDEN] Query Params:",
-      queryParams
+      Object.fromEntries(
+        url.searchParams.entries()
+      )
+    );
+
+    console.log(
+      "[MADDEN] Headers:",
+      safeHeaders(request)
     );
 
     console.log(
@@ -177,66 +156,88 @@ export async function POST(request, context) {
     );
 
     console.log(
+      "[MADDEN] Content-Encoding:",
+      request.headers.get("content-encoding")
+    );
+
+    console.log(
       "[MADDEN] Content-Length:",
       request.headers.get("content-length")
     );
 
-    // ============================================
-    // BODY INFORMATION
-    // ============================================
+    console.log(
+      "[MADDEN] Raw byte size:",
+      bytes.length
+    );
 
     console.log(
-      "[MADDEN] Body Size:",
-      rawBody.length
+      "[MADDEN] Decoded text size:",
+      rawText.length
     );
 
     console.log(
       "[MADDEN] Valid JSON:",
-      isJson
+      validJson
     );
 
     if (
-      isJson &&
-      parsedBody &&
-      typeof parsedBody === "object"
+      validJson &&
+      parsedJson &&
+      typeof parsedJson === "object"
     ) {
       console.log(
-        "[MADDEN] Top-Level Keys:",
-        Object.keys(parsedBody)
-      );
-    }
-
-    if (isJson) {
-      const prettyJson = JSON.stringify(
-        parsedBody,
-        null,
-        2
+        "[MADDEN] Top-level keys:",
+        Object.keys(parsedJson)
       );
 
-      logBodyInChunks(prettyJson);
+      logInChunks(
+        "[MADDEN JSON]",
+        JSON.stringify(parsedJson, null, 2)
+      );
+    } else if (rawText) {
+      logInChunks(
+        "[MADDEN RAW TEXT]",
+        rawText
+      );
+    } else if (bytes.length > 0) {
+      console.log(
+        "[MADDEN] Body contained bytes but could not decode as UTF-8."
+      );
+
+      console.log(
+        "[MADDEN] First 100 bytes:",
+        Array.from(bytes.slice(0, 100))
+      );
     } else {
-      logBodyInChunks(rawBody);
+      console.log("[MADDEN] BODY IS EMPTY");
     }
 
-    console.log("[MADDEN EXPORT END]");
+    console.log("[MADDEN REQUEST END]");
     console.log("========================================");
 
-    // Tell Madden we successfully received it
-    return Response.json(
-      {
-        status: "ok",
-        received: rawBody.length,
-        username,
+    const responsePayload = {
+      success: true,
+      status: "ok",
+      received: bytes.length,
+      username,
+      platform: routeInfo.platform,
+      leagueId: routeInfo.leagueId,
+      type: routeInfo.type,
+      seasonType: routeInfo.seasonType,
+      week: routeInfo.week,
+      statType: routeInfo.statType,
+    };
 
-        route: {
-          platform: routeInfo.platform,
-          leagueId: routeInfo.leagueId,
-          type: routeInfo.type,
-          seasonType: routeInfo.seasonType,
-          week: routeInfo.week,
-          statType: routeInfo.statType,
-        },
-      },
+    // HEAD responses must not contain a body.
+    if (request.method === "HEAD") {
+      return new Response(null, {
+        status: 200,
+        headers: CORS_HEADERS,
+      });
+    }
+
+    return Response.json(
+      responsePayload,
       {
         status: 200,
         headers: CORS_HEADERS,
@@ -244,12 +245,20 @@ export async function POST(request, context) {
     );
   } catch (error) {
     console.error(
-      "[MADDEN EXPORT ERROR]",
+      "[MADDEN REQUEST ERROR]",
       error
     );
 
+    if (request.method === "HEAD") {
+      return new Response(null, {
+        status: 500,
+        headers: CORS_HEADERS,
+      });
+    }
+
     return Response.json(
       {
+        success: false,
         status: "error",
         message:
           error?.message ||
@@ -263,70 +272,32 @@ export async function POST(request, context) {
   }
 }
 
+export async function POST(request, context) {
+  return handleMaddenRequest(request, context);
+}
+
+export async function PUT(request, context) {
+  return handleMaddenRequest(request, context);
+}
+
+export async function PATCH(request, context) {
+  return handleMaddenRequest(request, context);
+}
+
+export async function DELETE(request, context) {
+  return handleMaddenRequest(request, context);
+}
+
 export async function GET(request, context) {
-  try {
-    const { username, segments } = await context.params;
+  return handleMaddenRequest(request, context);
+}
 
-    const routeInfo = parseMaddenPath(segments);
-
-    console.log("========================================");
-    console.log("[MADDEN GET REQUEST]");
-    console.log("[MADDEN] Method:", request.method);
-    console.log("[MADDEN] URL:", request.url);
-    console.log("[MADDEN] Username:", username);
-    console.log("[MADDEN] Segments:", segments);
-    console.log("[MADDEN] Route:", routeInfo);
-    console.log("========================================");
-
-    return Response.json(
-      {
-        status: "ready",
-        username,
-
-        route: {
-          platform: routeInfo.platform,
-          leagueId: routeInfo.leagueId,
-          type: routeInfo.type,
-          seasonType: routeInfo.seasonType,
-          week: routeInfo.week,
-          statType: routeInfo.statType,
-        },
-
-        segments,
-
-        message:
-          "Madden Companion export endpoint is ready.",
-      },
-      {
-        status: 200,
-        headers: CORS_HEADERS,
-      }
-    );
-  } catch (error) {
-    console.error("[MADDEN GET ERROR]", error);
-
-    return Response.json(
-      {
-        status: "error",
-        message: error?.message || "Unknown error",
-      },
-      {
-        status: 500,
-        headers: CORS_HEADERS,
-      }
-    );
-  }
+export async function HEAD(request, context) {
+  return handleMaddenRequest(request, context);
 }
 
 export async function OPTIONS(request) {
-  console.log("========================================");
-  console.log("[MADDEN OPTIONS REQUEST]");
-  console.log("[MADDEN] URL:", request.url);
-  console.log(
-    "[MADDEN] Headers:",
-    Object.fromEntries(request.headers.entries())
-  );
-  console.log("========================================");
+  console.log("[MADDEN OPTIONS]", request.url);
 
   return new Response(null, {
     status: 204,
