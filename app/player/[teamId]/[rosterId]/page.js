@@ -1,0 +1,252 @@
+// app/player/[teamId]/[rosterId]/page.js
+//
+// Built entirely from confirmed real fields in the team_roster
+// export. Deliberately excluded vs the reference site: player photos
+// (we only have an internal portraitId, no actual image asset to
+// render) and a "Trade Information" panel (that's the reference
+// site's own computed trade-value system, not real Madden data — I'm
+// not fabricating a value/recommendation for it). Game Log / Career
+// Stats / Awards / History tabs are also skipped since we only have
+// a current roster snapshot, not historical season-by-season data.
+
+import Link from "next/link";
+import { getLatestRosterExport } from "../../../../lib/db";
+import { TEAM_COLORS } from "../../../../lib/madden";
+
+const USERNAME = "taylor";
+const DEFAULT_LEAGUE_ID = "2207259";
+
+const DEV_TRAIT_LABELS = { 0: "Normal", 1: "Star", 2: "Superstar", 3: "X-Factor" };
+
+function AttrRow({ label, value }) {
+  return (
+    <div className="flex items-center justify-between py-1 text-sm">
+      <span className="text-slate-400">{label}</span>
+      <span className="text-slate-100 font-medium tabular-nums">{value}</span>
+    </div>
+  );
+}
+
+function AttrCard({ title, rows }) {
+  return (
+    <div className="bg-slate-900/60 rounded-lg border border-slate-800 p-3">
+      <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5">{title}</div>
+      {rows.map(([label, value]) => (
+        <AttrRow key={label} label={label} value={value} />
+      ))}
+    </div>
+  );
+}
+
+function InfoRow({ label, value }) {
+  return (
+    <div className="flex items-center justify-between px-3 py-1.5 border-b border-slate-800/60 last:border-0 text-sm">
+      <span className="text-slate-400">{label}</span>
+      <span className="text-slate-100 font-medium">{value}</span>
+    </div>
+  );
+}
+
+export default async function PlayerPage({ params, searchParams }) {
+  const { teamId, rosterId } = await params;
+  const sp = await searchParams;
+  const leagueId = sp.league || DEFAULT_LEAGUE_ID;
+
+  const rosterExport = await getLatestRosterExport({ username: USERNAME, leagueId, teamId });
+  const players = rosterExport?.payload?.rosterInfoList ?? [];
+  const p = players.find((pl) => String(pl.rosterId) === String(rosterId));
+
+  if (!p) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-10 text-center">
+        <div>
+          <div className="text-lg font-semibold mb-2">Player not found</div>
+          <Link href={`/team/${teamId}?league=${leagueId}`} className="text-sky-400 text-sm hover:underline">
+            ← Back to team
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const color = TEAM_COLORS[p.position] ? undefined : "#334155"; // no team-name context here, keep neutral
+  const abilities = (p.signatureSlotList || []).filter((s) => !s.isEmpty && s.signatureAbility?.signatureTitle);
+  const draftText = p.draftPick > 0 ? `Round ${p.draftRound}, Pick ${p.draftPick}` : "Undrafted";
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      <div className="max-w-[1000px] mx-auto px-6 py-6">
+        <Link href={`/team/${teamId}?league=${leagueId}`} className="text-xs text-slate-500 hover:text-slate-300 mb-4 inline-block">
+          ← Back to team
+        </Link>
+
+        {/* Header */}
+        <div className="flex items-center gap-4 mb-6 bg-slate-900/60 border border-slate-800 rounded-xl p-5">
+          <div
+            className="w-16 h-16 rounded-xl flex items-center justify-center text-lg font-bold text-white flex-shrink-0"
+            style={{ backgroundColor: "#334155" }}
+          >
+            {p.position}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[11px] text-slate-500 mb-0.5">
+              {p.position} #{p.jerseyNum}
+            </div>
+            <h1 className="text-2xl font-bold text-slate-100 truncate">
+              {p.firstName} {p.lastName}
+            </h1>
+            <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+              {p.isOnIR && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-400">IR</span>}
+              {p.isOnPracticeSquad && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">Practice Squad</span>
+              )}
+              {p.isFreeAgent && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-500/15 text-slate-400">Free Agent</span>
+              )}
+              {DEV_TRAIT_LABELS[p.devTrait] && p.devTrait > 0 && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-400">
+                  {DEV_TRAIT_LABELS[p.devTrait]}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="text-right flex-shrink-0">
+            <div className="text-[10px] text-slate-500 uppercase tracking-wide">Overall</div>
+            <div className="text-3xl font-bold tabular-nums text-slate-100">{p.playerSchemeOvr}</div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div>
+            <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-1">Details</div>
+            <div className="bg-slate-900/60 rounded-lg border border-slate-800 overflow-hidden">
+              <InfoRow label="Age" value={p.age} />
+              <InfoRow label="Height / Weight" value={`${Math.floor(p.height / 12)}'${p.height % 12}", ${p.weight} lbs`} />
+              <InfoRow label="College" value={p.college} />
+              <InfoRow label="Years Pro" value={p.yearsPro} />
+              <InfoRow label="Rookie Year" value={p.rookieYear} />
+              <InfoRow label="Draft" value={draftText} />
+              <InfoRow label="Hometown" value={p.homeTown} />
+            </div>
+          </div>
+
+          <div className="md:col-span-2">
+            <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-1">Contract</div>
+            <div className="bg-slate-900/60 rounded-lg border border-slate-800 overflow-hidden grid grid-cols-2">
+              <InfoRow label="Cap Hit" value={`$${(p.capHit * 1000).toLocaleString()}`} />
+              <InfoRow label="Salary" value={`$${(p.contractSalary / 1000000).toFixed(2)}M`} />
+              <InfoRow label="Bonus" value={`$${(p.contractBonus / 1000000).toFixed(2)}M`} />
+              <InfoRow label="Years Left / Length" value={`${p.contractYearsLeft} / ${p.contractLength}`} />
+              <InfoRow label="Release Net Savings" value={`$${(p.capReleaseNetSavings / 1000000).toFixed(2)}M`} />
+              <InfoRow label="Release Penalty" value={`$${(p.capReleasePenalty * 1000).toLocaleString()}`} />
+            </div>
+          </div>
+        </div>
+
+        {abilities.length > 0 && (
+          <div className="mb-6">
+            <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-1">Signature Abilities</div>
+            <div className="bg-slate-900/60 rounded-lg border border-slate-800 divide-y divide-slate-800/60">
+              {abilities.map((s, i) => (
+                <div key={i} className="p-3">
+                  <div className="text-sm font-semibold text-sky-400 mb-1">{s.signatureAbility.signatureTitle}</div>
+                  <div className="text-xs text-slate-400">{s.signatureAbility.signatureDescription}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2 px-1">Attributes</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <AttrCard
+            title="Core"
+            rows={[
+              ["Speed", p.speedRating],
+              ["Acceleration", p.accelRating],
+              ["Agility", p.agilityRating],
+              ["Strength", p.strengthRating],
+              ["Awareness", p.awareRating],
+              ["Jump", p.jumpRating],
+              ["Stamina", p.staminaRating],
+              ["Toughness", p.toughRating],
+              ["Injury", p.injuryRating],
+            ]}
+          />
+          <AttrCard
+            title="Passing"
+            rows={[
+              ["Throw Power", p.throwPowerRating],
+              ["Short Accuracy", p.throwAccShortRating],
+              ["Mid Accuracy", p.throwAccMidRating],
+              ["Deep Accuracy", p.throwAccDeepRating],
+              ["Throw On Run", p.throwOnRunRating],
+              ["Play Action", p.playActionRating],
+              ["Break Sack", p.breakSackRating],
+              ["Under Pressure", p.throwUnderPressureRating],
+            ]}
+          />
+          <AttrCard
+            title="Rushing"
+            rows={[
+              ["Carry", p.carryRating],
+              ["Change of Direction", p.changeOfDirectionRating],
+              ["Spin Move", p.spinMoveRating],
+              ["Juke Move", p.jukeMoveRating],
+              ["Break Tackle", p.breakTackleRating],
+              ["Ball Carry Vision", p.bCVRating],
+              ["Trucking", p.truckRating],
+              ["Stiff Arm", p.stiffArmRating],
+            ]}
+          />
+          <AttrCard
+            title="Receiving"
+            rows={[
+              ["Catch", p.catchRating],
+              ["Spectacular Catch", p.specCatchRating],
+              ["Catch In Traffic", p.cITRating],
+              ["Release", p.releaseRating],
+              ["Short Route Running", p.routeRunShortRating],
+              ["Med Route Running", p.routeRunMedRating],
+              ["Deep Route Running", p.routeRunDeepRating],
+              ["Kick Return", p.kickRetRating],
+            ]}
+          />
+          <AttrCard
+            title="Blocking"
+            rows={[
+              ["Pass Block", p.passBlockRating],
+              ["Pass Block Power", p.passBlockPowerRating],
+              ["Pass Block Finesse", p.passBlockFinesseRating],
+              ["Run Block", p.runBlockRating],
+              ["Run Block Power", p.runBlockPowerRating],
+              ["Run Block Finesse", p.runBlockFinesseRating],
+              ["Lead Block", p.leadBlockRating],
+              ["Impact Block", p.impactBlockRating],
+            ]}
+          />
+          <AttrCard
+            title="Defense"
+            rows={[
+              ["Tackle", p.tackleRating],
+              ["Hit Power", p.hitPowerRating],
+              ["Pursuit", p.pursuitRating],
+              ["Play Recognition", p.playRecRating],
+              ["Block Shedding", p.blockShedRating],
+              ["Man Coverage", p.manCoverRating],
+              ["Zone Coverage", p.zoneCoverRating],
+              ["Press", p.pressRating],
+            ]}
+          />
+          <AttrCard
+            title="Kicking"
+            rows={[
+              ["Kick Power", p.kickPowerRating],
+              ["Kick Accuracy", p.kickAccRating],
+            ]}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}

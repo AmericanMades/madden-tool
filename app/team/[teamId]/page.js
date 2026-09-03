@@ -1,24 +1,15 @@
 // app/team/[teamId]/page.js
 //
-// Now pulls real roster data when available (getLatestRosterExport),
-// falling back to placeholders for teams that don't have a roster
-// export saved yet.
-//
-// One field choice worth flagging: there's no single field plainly
-// named "overall" in the real roster payload — the closest
-// candidates are playerSchemeOvr, teamSchemeOvr, and playerBestOvr
-// (career best). Using playerSchemeOvr as the "OVR" shown throughout
-// since it reads as the closest analog to a current rating, but this
-// is an inferred choice, not a confirmed field name — worth
-// double-checking against what the in-game roster screen shows for
-// a specific player if it looks off.
+// Now league-aware: reads ?league= from the URL (falling back to the
+// original known league if absent), instead of always using one
+// hardcoded league.
 
 import Link from "next/link";
 import { getLatestExport, getLatestRosterExport } from "../../../lib/db";
 import { decodeStreak, TEAM_COLORS } from "../../../lib/madden";
 
 const USERNAME = "taylor";
-const LEAGUE_ID = "2207259";
+const DEFAULT_LEAGUE_ID = "2207259";
 
 const OFFENSE_POS = ["QB", "HB", "FB", "WR", "TE", "LT", "LG", "C", "RG", "RT"];
 const DEFENSE_POS = ["LEDG", "REDG", "DT", "MIKE", "SAM", "WILL", "CB", "FS", "SS"];
@@ -123,7 +114,7 @@ function ContractWatchPanel({ players }) {
   );
 }
 
-function RosterSection({ players }) {
+function RosterSection({ players, teamId, leagueId }) {
   const grouped = { Offense: {}, Defense: {}, "Special Teams": {} };
   for (const p of players) {
     const broad = classifyPosition(p.position);
@@ -148,19 +139,20 @@ function RosterSection({ players }) {
                     .map((p, i, arr) => {
                       const badge = playerStatusBadge(p);
                       return (
-                        <div
+                        <Link
                           key={p.rosterId}
-                          className={`flex items-center gap-1.5 px-2 py-1 text-xs ${i !== arr.length - 1 ? "border-b border-slate-800/40" : ""}`}
+                          href={`/player/${teamId}/${p.rosterId}?league=${leagueId}`}
+                          className={`flex items-center gap-1.5 px-2 py-1 text-xs hover:bg-slate-800/60 ${
+                            i !== arr.length - 1 ? "border-b border-slate-800/40" : ""
+                          }`}
                         >
                           <span className="text-slate-600 w-6 flex-shrink-0">#{p.jerseyNum}</span>
-                          <span className="text-slate-200 font-medium truncate flex-1">
+                          <span className="text-slate-200 font-medium truncate flex-1 hover:underline">
                             {p.firstName} {p.lastName}
                           </span>
-                          {badge && (
-                            <span className={`text-[9px] font-bold px-1 rounded ${badge.color}`}>{badge.label}</span>
-                          )}
+                          {badge && <span className={`text-[9px] font-bold px-1 rounded ${badge.color}`}>{badge.label}</span>}
                           <span className="text-slate-400 tabular-nums w-6 text-right">{p.playerSchemeOvr}</span>
-                        </div>
+                        </Link>
                       );
                     })}
                 </div>
@@ -173,10 +165,12 @@ function RosterSection({ players }) {
   );
 }
 
-export default async function TeamPage({ params }) {
+export default async function TeamPage({ params, searchParams }) {
   const { teamId } = await params;
+  const sp = await searchParams;
+  const leagueId = sp.league || DEFAULT_LEAGUE_ID;
 
-  const latest = await getLatestExport({ username: USERNAME, leagueId: LEAGUE_ID, exportType: "standings" });
+  const latest = await getLatestExport({ username: USERNAME, leagueId, exportType: "standings" });
 
   if (!latest) {
     return (
@@ -194,7 +188,7 @@ export default async function TeamPage({ params }) {
       <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-10 text-center">
         <div>
           <div className="text-lg font-semibold mb-2">Team not found</div>
-          <Link href="/" className="text-sky-400 text-sm hover:underline">
+          <Link href={`/?league=${leagueId}`} className="text-sky-400 text-sm hover:underline">
             Back to overview
           </Link>
         </div>
@@ -202,7 +196,7 @@ export default async function TeamPage({ params }) {
     );
   }
 
-  const rosterExport = await getLatestRosterExport({ username: USERNAME, leagueId: LEAGUE_ID, teamId });
+  const rosterExport = await getLatestRosterExport({ username: USERNAME, leagueId, teamId });
   const players = rosterExport?.payload?.rosterInfoList ?? null;
 
   const color = TEAM_COLORS[team.teamName] || "#64748B";
@@ -212,7 +206,7 @@ export default async function TeamPage({ params }) {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="max-w-[1100px] mx-auto px-6 py-6">
-        <Link href="/" className="text-xs text-slate-500 hover:text-slate-300 mb-4 inline-block">
+        <Link href={`/?league=${leagueId}`} className="text-xs text-slate-500 hover:text-slate-300 mb-4 inline-block">
           ← Back to overview
         </Link>
 
@@ -305,7 +299,7 @@ export default async function TeamPage({ params }) {
               <CornerstonesPanel players={players} />
               <ContractWatchPanel players={players} />
             </div>
-            <RosterSection players={players} />
+            <RosterSection players={players} teamId={teamId} leagueId={leagueId} />
           </>
         ) : (
           <>

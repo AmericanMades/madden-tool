@@ -1,28 +1,18 @@
 // app/schedule/page.js
-//
-// Built from confirmed real week_schedules data. Team IDs in the
-// schedule payload are cross-referenced against the standings export
-// to show real team names/colors instead of raw numeric IDs.
-//
-// One inference worth flagging: status appears to be 3 for a
-// completed game (the one real example had status 3 with real
-// scores) and 1 for a game not yet played (0-0 scores). That's
-// inferred from a single example, not confirmed — worth a sanity
-// check once real completed games show up across more weeks.
 
 import Link from "next/link";
 import { getLatestExport, getAllWeeksForExportType } from "../../lib/db";
 import { TEAM_COLORS } from "../../lib/madden";
 
 const USERNAME = "taylor";
-const LEAGUE_ID = "2207259";
+const DEFAULT_LEAGUE_ID = "2207259";
 
-function TeamLabel({ team, align = "left" }) {
+function TeamLabel({ team, leagueId, align = "left" }) {
   if (!team) return <span className="text-slate-600 text-sm">Unknown</span>;
   const color = TEAM_COLORS[team.teamName] || "#64748B";
   return (
     <Link
-      href={`/team/${team.teamId}`}
+      href={`/team/${team.teamId}?league=${leagueId}`}
       className={`flex items-center gap-1.5 hover:underline ${align === "right" ? "flex-row-reverse text-right" : ""}`}
     >
       <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
@@ -31,14 +21,14 @@ function TeamLabel({ team, align = "left" }) {
   );
 }
 
-function GameRow({ game, teamsById }) {
+function GameRow({ game, teamsById, leagueId }) {
   const away = teamsById[game.awayTeamId];
   const home = teamsById[game.homeTeamId];
   const isFinal = game.status === 3;
 
   return (
     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-3 py-2 border-b border-slate-800/60 last:border-0">
-      <TeamLabel team={away} />
+      <TeamLabel team={away} leagueId={leagueId} />
       <div className="text-center min-w-[70px]">
         {isFinal ? (
           <div className="text-sm font-bold tabular-nums text-slate-100">
@@ -48,14 +38,17 @@ function GameRow({ game, teamsById }) {
           <div className="text-[10px] text-slate-500 uppercase tracking-wide">Scheduled</div>
         )}
       </div>
-      <TeamLabel team={home} align="right" />
+      <TeamLabel team={home} leagueId={leagueId} align="right" />
     </div>
   );
 }
 
-export default async function SchedulePage() {
-  const standingsExport = await getLatestExport({ username: USERNAME, leagueId: LEAGUE_ID, exportType: "standings" });
-  const weeks = await getAllWeeksForExportType({ username: USERNAME, leagueId: LEAGUE_ID, exportType: "week_schedules" });
+export default async function SchedulePage({ searchParams }) {
+  const sp = await searchParams;
+  const leagueId = sp.league || DEFAULT_LEAGUE_ID;
+
+  const standingsExport = await getLatestExport({ username: USERNAME, leagueId, exportType: "standings" });
+  const weeks = await getAllWeeksForExportType({ username: USERNAME, leagueId, exportType: "week_schedules" });
 
   if (!standingsExport || weeks.length === 0) {
     return (
@@ -74,7 +67,7 @@ export default async function SchedulePage() {
       <div className="max-w-[900px] mx-auto px-6 py-6">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-xl font-bold text-slate-100">Schedule</h1>
-          <Link href="/" className="text-xs text-slate-500 hover:text-slate-300">
+          <Link href={`/?league=${leagueId}`} className="text-xs text-slate-500 hover:text-slate-300">
             ← Back to overview
           </Link>
         </div>
@@ -83,12 +76,10 @@ export default async function SchedulePage() {
           const games = w.payload.gameScheduleInfoList || [];
           return (
             <div key={w.week} className="mb-6">
-              <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-1">
-                Week {w.week}
-              </div>
+              <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-1">Week {w.week}</div>
               <div className="bg-slate-900/60 rounded-lg border border-slate-800 overflow-hidden">
                 {games.map((g) => (
-                  <GameRow key={g.scheduleId} game={g} teamsById={teamsById} />
+                  <GameRow key={g.scheduleId} game={g} teamsById={teamsById} leagueId={leagueId} />
                 ))}
               </div>
             </div>
