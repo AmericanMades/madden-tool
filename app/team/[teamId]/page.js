@@ -1,8 +1,4 @@
 // app/team/[teamId]/page.js
-//
-// Now league-aware: reads ?league= from the URL (falling back to the
-// original known league if absent), instead of always using one
-// hardcoded league.
 
 import Link from "next/link";
 import { getLatestExport, getLatestRosterExport } from "../../../lib/db";
@@ -29,13 +25,22 @@ function playerStatusBadge(p) {
   return null;
 }
 
+function SectionLabel({ children }) {
+  return (
+    <div className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 px-1 flex items-center gap-2">
+      <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+      {children}
+    </div>
+  );
+}
+
 function StatRow({ label, value, rank }) {
   return (
-    <div className="flex items-center justify-between px-3 py-1.5 border-b border-slate-800/60 last:border-0 text-sm">
+    <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800/50 last:border-0 text-sm">
       <span className="text-slate-400">{label}</span>
       <span className="flex items-center gap-2">
-        <span className="text-slate-100 font-medium tabular-nums">{value}</span>
-        {rank != null && <span className="text-[10px] text-slate-500 tabular-nums">#{rank}</span>}
+        <span className="text-slate-100 font-semibold tabular-nums">{value}</span>
+        {rank != null && <span className="text-[10px] text-slate-500 tabular-nums font-medium">#{rank}</span>}
       </span>
     </div>
   );
@@ -45,16 +50,16 @@ function StatCard({ title, children }) {
   return (
     <div>
       <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-1">{title}</div>
-      <div className="bg-slate-900/60 rounded-lg border border-slate-800 overflow-hidden">{children}</div>
+      <div className="bg-slate-900/50 rounded-xl border border-slate-800/80 shadow-sm shadow-black/20 overflow-hidden">{children}</div>
     </div>
   );
 }
 
 function SummaryTile({ label, value, sub }) {
   return (
-    <div className="bg-slate-900/60 rounded-lg border border-slate-800 p-3">
+    <div className="bg-slate-900/50 rounded-xl border border-slate-800/80 shadow-sm shadow-black/20 p-3.5">
       <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">{label}</div>
-      <div className="text-2xl font-bold text-slate-100 tabular-nums">{value}</div>
+      <div className="text-2xl font-bold text-slate-50 tabular-nums">{value}</div>
       {sub && <div className="text-[11px] text-slate-500 mt-0.5">{sub}</div>}
     </div>
   );
@@ -64,7 +69,7 @@ function PlaceholderPanel({ title, note }) {
   return (
     <div>
       <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-1">{title}</div>
-      <div className="bg-slate-900/60 rounded-lg border border-dashed border-slate-800 p-6 text-center text-sm text-slate-600 italic">
+      <div className="bg-slate-900/40 rounded-xl border border-dashed border-slate-800 p-6 text-center text-sm text-slate-600 italic">
         {note}
       </div>
     </div>
@@ -76,14 +81,23 @@ function CornerstonesPanel({ players }) {
   return (
     <div>
       <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-1">Franchise Cornerstones</div>
-      <div className="bg-slate-900/60 rounded-lg border border-slate-800 overflow-hidden">
+      <div className="bg-slate-900/50 rounded-xl border border-slate-800/80 shadow-sm shadow-black/20 overflow-hidden">
         {top.map((p, i) => (
-          <div key={p.rosterId} className={`flex items-center gap-2 px-3 py-1.5 text-sm ${i !== top.length - 1 ? "border-b border-slate-800/60" : ""}`}>
-            <span className="text-slate-600 tabular-nums text-xs w-4">{i + 1}</span>
-            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 w-9 text-center flex-shrink-0">{p.position}</span>
-            <span className="text-slate-200 font-medium flex-1 truncate">{p.firstName} {p.lastName}</span>
+          <div
+            key={p.rosterId}
+            className={`flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-800/30 transition-colors ${
+              i !== top.length - 1 ? "border-b border-slate-800/50" : ""
+            }`}
+          >
+            <span className="text-slate-600 tabular-nums text-xs w-4 font-medium">{i + 1}</span>
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 w-9 text-center flex-shrink-0">
+              {p.position}
+            </span>
+            <span className="text-slate-200 font-medium flex-1 truncate">
+              {p.firstName} {p.lastName}
+            </span>
             <span className="text-slate-500 text-xs">Age {p.age}</span>
-            <span className="text-slate-100 font-bold tabular-nums w-7 text-right">{p.playerSchemeOvr}</span>
+            <span className="text-amber-400 font-bold tabular-nums w-7 text-right">{p.playerSchemeOvr}</span>
           </div>
         ))}
       </div>
@@ -100,13 +114,26 @@ function ContractWatchPanel({ players }) {
   return (
     <div>
       <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-1">Contract Watch — Expiring Soon</div>
-      <div className="bg-slate-900/60 rounded-lg border border-slate-800 overflow-hidden">
+      <div className="bg-slate-900/50 rounded-xl border border-slate-800/80 shadow-sm shadow-black/20 overflow-hidden">
         {watch.map((p, i) => (
-          <div key={p.rosterId} className={`flex items-center gap-2 px-3 py-1.5 text-sm ${i !== watch.length - 1 ? "border-b border-slate-800/60" : ""}`}>
-            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 w-9 text-center flex-shrink-0">{p.position}</span>
-            <span className="text-slate-200 font-medium flex-1 truncate">{p.firstName} {p.lastName}</span>
-            <span className="text-amber-400 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-500/15">{p.contractYearsLeft}Y LEFT</span>
-            <span className="text-slate-100 tabular-nums text-xs w-16 text-right">${(p.contractSalary / 1000000).toFixed(1)}M</span>
+          <div
+            key={p.rosterId}
+            className={`flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-800/30 transition-colors ${
+              i !== watch.length - 1 ? "border-b border-slate-800/50" : ""
+            }`}
+          >
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 w-9 text-center flex-shrink-0">
+              {p.position}
+            </span>
+            <span className="text-slate-200 font-medium flex-1 truncate">
+              {p.firstName} {p.lastName}
+            </span>
+            <span className="text-amber-400 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15">
+              {p.contractYearsLeft}Y LEFT
+            </span>
+            <span className="text-slate-100 font-medium tabular-nums text-xs w-16 text-right">
+              ${(p.contractSalary / 1000000).toFixed(1)}M
+            </span>
           </div>
         ))}
       </div>
@@ -125,15 +152,15 @@ function RosterSection({ players, teamId, leagueId }) {
 
   return (
     <div>
-      <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-1">Roster</div>
+      <SectionLabel>Roster</SectionLabel>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {Object.entries(grouped).map(([group, positions]) => (
           <div key={group}>
             <div className="text-xs font-semibold text-slate-400 mb-2">{group}</div>
             <div className="space-y-2">
               {Object.entries(positions).map(([pos, list]) => (
-                <div key={pos} className="bg-slate-900/60 rounded-lg border border-slate-800 overflow-hidden">
-                  <div className="bg-slate-800/60 px-2 py-1 text-[10px] font-bold text-slate-400">{pos}</div>
+                <div key={pos} className="bg-slate-900/50 rounded-lg border border-slate-800/80 shadow-sm shadow-black/10 overflow-hidden">
+                  <div className="bg-slate-800/50 px-2 py-1 text-[10px] font-bold text-slate-400 tracking-wide">{pos}</div>
                   {list
                     .sort((a, b) => b.playerSchemeOvr - a.playerSchemeOvr)
                     .map((p, i, arr) => {
@@ -142,7 +169,7 @@ function RosterSection({ players, teamId, leagueId }) {
                         <Link
                           key={p.rosterId}
                           href={`/player/${teamId}/${p.rosterId}?league=${leagueId}`}
-                          className={`flex items-center gap-1.5 px-2 py-1 text-xs hover:bg-slate-800/60 ${
+                          className={`flex items-center gap-1.5 px-2 py-1.5 text-xs hover:bg-slate-800/50 transition-colors ${
                             i !== arr.length - 1 ? "border-b border-slate-800/40" : ""
                           }`}
                         >
@@ -151,7 +178,7 @@ function RosterSection({ players, teamId, leagueId }) {
                             {p.firstName} {p.lastName}
                           </span>
                           {badge && <span className={`text-[9px] font-bold px-1 rounded ${badge.color}`}>{badge.label}</span>}
-                          <span className="text-slate-400 tabular-nums w-6 text-right">{p.playerSchemeOvr}</span>
+                          <span className="text-slate-400 font-medium tabular-nums w-6 text-right">{p.playerSchemeOvr}</span>
                         </Link>
                       );
                     })}
@@ -188,7 +215,7 @@ export default async function TeamPage({ params, searchParams }) {
       <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-10 text-center">
         <div>
           <div className="text-lg font-semibold mb-2">Team not found</div>
-          <Link href={`/?league=${leagueId}`} className="text-sky-400 text-sm hover:underline">
+          <Link href={`/?league=${leagueId}`} className="text-amber-400 text-sm hover:underline">
             Back to overview
           </Link>
         </div>
@@ -205,39 +232,47 @@ export default async function TeamPage({ params, searchParams }) {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="max-w-[1100px] mx-auto px-6 py-6">
-        <Link href={`/?league=${leagueId}`} className="text-xs text-slate-500 hover:text-slate-300 mb-4 inline-block">
+      <div className="max-w-[1100px] mx-auto px-6 py-7">
+        <Link href={`/?league=${leagueId}`} className="text-xs text-slate-500 hover:text-slate-300 mb-4 inline-block transition-colors">
           ← Back to overview
         </Link>
 
         <div
-          className="rounded-xl p-5 mb-5 flex items-center justify-between"
-          style={{ backgroundColor: `${color}22`, border: `1px solid ${color}55` }}
+          className="rounded-2xl p-6 mb-6 flex items-center justify-between shadow-sm shadow-black/20"
+          style={{ backgroundColor: `${color}1a`, border: `1px solid ${color}44` }}
         >
           <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
-              <h1 className="text-2xl font-bold text-slate-100">{team.teamName}</h1>
+            <div className="flex items-center gap-2.5 mb-2.5">
+              <span className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: color }} />
+              <h1 className="text-2xl font-bold text-slate-50 tracking-tight">{team.teamName}</h1>
             </div>
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-300">{team.conferenceName}</span>
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-300">{team.divisionName}</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800/80 text-slate-300 tracking-wide">
+                {team.conferenceName}
+              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800/80 text-slate-300 tracking-wide">
+                {team.divisionName}
+              </span>
               {team.seed > 0 && (
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-sky-500/20 text-sky-400">Seed #{team.seed}</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-400 tracking-wide">
+                  Seed #{team.seed}
+                </span>
               )}
               {team.playoffStatus === 1 && (
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400">In Playoff Position</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 tracking-wide">
+                  In Playoff Position
+                </span>
               )}
             </div>
           </div>
           <div className="text-right">
-            <div className="text-3xl font-bold tabular-nums text-slate-100">
+            <div className="text-4xl font-bold tabular-nums text-slate-50 tracking-tight">
               {team.totalWins}-{team.totalLosses}
               {team.totalTies > 0 ? `-${team.totalTies}` : ""}
             </div>
             {streak && (
               <span
-                className={`text-xs font-semibold px-1.5 py-0.5 rounded inline-block mt-1 ${
+                className={`text-xs font-bold px-1.5 py-0.5 rounded inline-block mt-1.5 ${
                   streak.type === "W" ? "bg-emerald-500/15 text-emerald-400" : "bg-rose-500/15 text-rose-400"
                 }`}
               >
@@ -247,7 +282,7 @@ export default async function TeamPage({ params, searchParams }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 mb-7">
           <SummaryTile label="Team OVR" value={team.teamOvr} sub={`League rank #${team.rank}`} />
           <SummaryTile label="Record" value={`${team.totalWins}-${team.totalLosses}`} sub={team.divisionName} />
           <SummaryTile
@@ -258,27 +293,30 @@ export default async function TeamPage({ params, searchParams }) {
           <SummaryTile label="Turnover Diff." value={team.tODiff > 0 ? `+${team.tODiff}` : team.tODiff} />
         </div>
 
-        <div className="mb-6">
+        <div className="mb-7">
           <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-1">Cap Usage</div>
-          <div className="bg-slate-900/60 rounded-lg border border-slate-800 p-4">
-            <div className="flex items-center justify-between text-sm mb-2">
+          <div className="bg-slate-900/50 rounded-xl border border-slate-800/80 shadow-sm shadow-black/20 p-4">
+            <div className="flex items-center justify-between text-sm mb-2.5">
               <span className="text-slate-400">
-                Spent <span className="text-slate-100 font-medium">${(team.capSpent / 1000000).toFixed(2)}M</span>
+                Spent <span className="text-slate-100 font-semibold">${(team.capSpent / 1000000).toFixed(2)}M</span>
               </span>
               <span className="text-slate-400">
-                Total <span className="text-slate-100 font-medium">${(team.capRoom / 1000000).toFixed(2)}M</span>
+                Total <span className="text-slate-100 font-semibold">${(team.capRoom / 1000000).toFixed(2)}M</span>
               </span>
             </div>
-            <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
-              <div className="h-full rounded-full" style={{ width: `${Math.min(capPct ?? 0, 100)}%`, backgroundColor: color }} />
+            <div className="h-2.5 rounded-full bg-slate-800 overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all"
+                style={{ width: `${Math.min(capPct ?? 0, 100)}%`, backgroundColor: color }}
+              />
             </div>
-            <div className="text-[11px] text-slate-500 mt-1.5">
-              Available: <span className="text-slate-300">${(team.capAvailable / 1000000).toFixed(2)}M</span>
+            <div className="text-[11px] text-slate-500 mt-2">
+              Available: <span className="text-slate-300 font-medium">${(team.capAvailable / 1000000).toFixed(2)}M</span>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-7">
           <StatCard title="Offense">
             <StatRow label="Total Yards" value={team.offTotalYds} rank={team.offTotalYdsRank} />
             <StatRow label="Passing Yards" value={team.offPassYds} rank={team.offPassYdsRank} />
@@ -295,7 +333,7 @@ export default async function TeamPage({ params, searchParams }) {
 
         {players ? (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-7">
               <CornerstonesPanel players={players} />
               <ContractWatchPanel players={players} />
             </div>
@@ -303,11 +341,14 @@ export default async function TeamPage({ params, searchParams }) {
           </>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-7">
               <PlaceholderPanel title="Franchise Cornerstones" note="No roster export saved for this team yet." />
               <PlaceholderPanel title="Contract Watch" note="No roster export saved for this team yet." />
             </div>
-            <PlaceholderPanel title="Roster" note="No roster export saved for this team yet — trigger one from the Companion App for this specific team." />
+            <PlaceholderPanel
+              title="Roster"
+              note="No roster export saved for this team yet — trigger one from the Companion App for this specific team."
+            />
           </>
         )}
       </div>

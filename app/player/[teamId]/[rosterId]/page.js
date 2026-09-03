@@ -1,17 +1,7 @@
 // app/player/[teamId]/[rosterId]/page.js
-//
-// Built entirely from confirmed real fields in the team_roster
-// export. Deliberately excluded vs the reference site: player photos
-// (we only have an internal portraitId, no actual image asset to
-// render) and a "Trade Information" panel (that's the reference
-// site's own computed trade-value system, not real Madden data — I'm
-// not fabricating a value/recommendation for it). Game Log / Career
-// Stats / Awards / History tabs are also skipped since we only have
-// a current roster snapshot, not historical season-by-season data.
 
 import Link from "next/link";
 import { getLatestRosterExport } from "../../../../lib/db";
-import { TEAM_COLORS } from "../../../../lib/madden";
 
 const USERNAME = "taylor";
 const DEFAULT_LEAGUE_ID = "2207259";
@@ -22,15 +12,15 @@ function AttrRow({ label, value }) {
   return (
     <div className="flex items-center justify-between py-1 text-sm">
       <span className="text-slate-400">{label}</span>
-      <span className="text-slate-100 font-medium tabular-nums">{value}</span>
+      <span className="text-slate-100 font-semibold tabular-nums">{value}</span>
     </div>
   );
 }
 
 function AttrCard({ title, rows }) {
   return (
-    <div className="bg-slate-900/60 rounded-lg border border-slate-800 p-3">
-      <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5">{title}</div>
+    <div className="bg-slate-900/50 rounded-xl border border-slate-800/80 shadow-sm shadow-black/20 p-3.5">
+      <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">{title}</div>
       {rows.map(([label, value]) => (
         <AttrRow key={label} label={label} value={value} />
       ))}
@@ -40,9 +30,9 @@ function AttrCard({ title, rows }) {
 
 function InfoRow({ label, value }) {
   return (
-    <div className="flex items-center justify-between px-3 py-1.5 border-b border-slate-800/60 last:border-0 text-sm">
+    <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800/50 last:border-0 text-sm">
       <span className="text-slate-400">{label}</span>
-      <span className="text-slate-100 font-medium">{value}</span>
+      <span className="text-slate-100 font-semibold">{value}</span>
     </div>
   );
 }
@@ -61,7 +51,7 @@ export default async function PlayerPage({ params, searchParams }) {
       <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-10 text-center">
         <div>
           <div className="text-lg font-semibold mb-2">Player not found</div>
-          <Link href={`/team/${teamId}?league=${leagueId}`} className="text-sky-400 text-sm hover:underline">
+          <Link href={`/team/${teamId}?league=${leagueId}`} className="text-amber-400 text-sm hover:underline">
             ← Back to team
           </Link>
         </div>
@@ -69,33 +59,31 @@ export default async function PlayerPage({ params, searchParams }) {
     );
   }
 
-  const color = TEAM_COLORS[p.position] ? undefined : "#334155"; // no team-name context here, keep neutral
   const abilities = (p.signatureSlotList || []).filter((s) => !s.isEmpty && s.signatureAbility?.signatureTitle);
   const draftText = p.draftPick > 0 ? `Round ${p.draftRound}, Pick ${p.draftPick}` : "Undrafted";
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="max-w-[1000px] mx-auto px-6 py-6">
-        <Link href={`/team/${teamId}?league=${leagueId}`} className="text-xs text-slate-500 hover:text-slate-300 mb-4 inline-block">
+      <div className="max-w-[1000px] mx-auto px-6 py-7">
+        <Link
+          href={`/team/${teamId}?league=${leagueId}`}
+          className="text-xs text-slate-500 hover:text-slate-300 mb-4 inline-block transition-colors"
+        >
           ← Back to team
         </Link>
 
-        {/* Header */}
-        <div className="flex items-center gap-4 mb-6 bg-slate-900/60 border border-slate-800 rounded-xl p-5">
-          <div
-            className="w-16 h-16 rounded-xl flex items-center justify-center text-lg font-bold text-white flex-shrink-0"
-            style={{ backgroundColor: "#334155" }}
-          >
+        <div className="flex items-center gap-4 mb-7 bg-slate-900/50 border border-slate-800/80 shadow-sm shadow-black/20 rounded-2xl p-6">
+          <div className="w-16 h-16 rounded-xl flex items-center justify-center text-lg font-bold text-white flex-shrink-0 bg-slate-800 shadow-sm">
             {p.position}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-[11px] text-slate-500 mb-0.5">
+            <div className="text-[11px] font-semibold text-slate-500 mb-0.5 tracking-wide">
               {p.position} #{p.jerseyNum}
             </div>
-            <h1 className="text-2xl font-bold text-slate-100 truncate">
+            <h1 className="text-2xl font-bold text-slate-50 truncate tracking-tight">
               {p.firstName} {p.lastName}
             </h1>
-            <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+            <div className="flex items-center gap-1.5 flex-wrap mt-2">
               {p.isOnIR && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-400">IR</span>}
               {p.isOnPracticeSquad && (
                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">Practice Squad</span>
@@ -104,22 +92,22 @@ export default async function PlayerPage({ params, searchParams }) {
                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-500/15 text-slate-400">Free Agent</span>
               )}
               {DEV_TRAIT_LABELS[p.devTrait] && p.devTrait > 0 && (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-400">
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">
                   {DEV_TRAIT_LABELS[p.devTrait]}
                 </span>
               )}
             </div>
           </div>
           <div className="text-right flex-shrink-0">
-            <div className="text-[10px] text-slate-500 uppercase tracking-wide">Overall</div>
-            <div className="text-3xl font-bold tabular-nums text-slate-100">{p.playerSchemeOvr}</div>
+            <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Overall</div>
+            <div className="text-4xl font-bold tabular-nums text-slate-50 tracking-tight">{p.playerSchemeOvr}</div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-7">
           <div>
             <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-1">Details</div>
-            <div className="bg-slate-900/60 rounded-lg border border-slate-800 overflow-hidden">
+            <div className="bg-slate-900/50 rounded-xl border border-slate-800/80 shadow-sm shadow-black/20 overflow-hidden">
               <InfoRow label="Age" value={p.age} />
               <InfoRow label="Height / Weight" value={`${Math.floor(p.height / 12)}'${p.height % 12}", ${p.weight} lbs`} />
               <InfoRow label="College" value={p.college} />
@@ -132,7 +120,7 @@ export default async function PlayerPage({ params, searchParams }) {
 
           <div className="md:col-span-2">
             <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-1">Contract</div>
-            <div className="bg-slate-900/60 rounded-lg border border-slate-800 overflow-hidden grid grid-cols-2">
+            <div className="bg-slate-900/50 rounded-xl border border-slate-800/80 shadow-sm shadow-black/20 overflow-hidden grid grid-cols-2">
               <InfoRow label="Cap Hit" value={`$${(p.capHit * 1000).toLocaleString()}`} />
               <InfoRow label="Salary" value={`$${(p.contractSalary / 1000000).toFixed(2)}M`} />
               <InfoRow label="Bonus" value={`$${(p.contractBonus / 1000000).toFixed(2)}M`} />
@@ -144,21 +132,24 @@ export default async function PlayerPage({ params, searchParams }) {
         </div>
 
         {abilities.length > 0 && (
-          <div className="mb-6">
+          <div className="mb-7">
             <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-1">Signature Abilities</div>
-            <div className="bg-slate-900/60 rounded-lg border border-slate-800 divide-y divide-slate-800/60">
+            <div className="bg-slate-900/50 rounded-xl border border-slate-800/80 shadow-sm shadow-black/20 divide-y divide-slate-800/50">
               {abilities.map((s, i) => (
-                <div key={i} className="p-3">
-                  <div className="text-sm font-semibold text-sky-400 mb-1">{s.signatureAbility.signatureTitle}</div>
-                  <div className="text-xs text-slate-400">{s.signatureAbility.signatureDescription}</div>
+                <div key={i} className="p-3.5">
+                  <div className="text-sm font-bold text-amber-400 mb-1">{s.signatureAbility.signatureTitle}</div>
+                  <div className="text-xs text-slate-400 leading-relaxed">{s.signatureAbility.signatureDescription}</div>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2 px-1">Attributes</div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3 px-1 flex items-center gap-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+          Attributes
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
           <AttrCard
             title="Core"
             rows={[

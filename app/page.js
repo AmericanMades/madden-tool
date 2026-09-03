@@ -1,9 +1,4 @@
 // app/page.js
-//
-// Now league-aware: reads ?league= from the URL, falling back to the
-// one known league if absent (so old links/bookmarks still work).
-// Also highlights the user's own team (from league_settings) in the
-// standings tables.
 
 import Link from "next/link";
 import { getLatestExport, getLeagueSettings } from "../lib/db";
@@ -13,6 +8,15 @@ const USERNAME = "taylor";
 const DEFAULT_LEAGUE_ID = "2207259";
 
 const DIVISION_ORDER = ["AFC East", "AFC North", "AFC South", "AFC West", "NFC East", "NFC North", "NFC South", "NFC West"];
+
+function SectionLabel({ children }) {
+  return (
+    <div className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3 px-1 flex items-center gap-2">
+      <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+      {children}
+    </div>
+  );
+}
 
 function TeamDot({ name }) {
   const color = TEAM_COLORS[name] || "#64748B";
@@ -24,7 +28,7 @@ function StreakBadge({ value }) {
   if (!streak) return null;
   return (
     <span
-      className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+      className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
         streak.type === "W" ? "bg-emerald-500/15 text-emerald-400" : "bg-rose-500/15 text-rose-400"
       }`}
     >
@@ -51,12 +55,9 @@ function PlayoffRaceTable({ conference, teams, leagueId, myTeamId }) {
   const race = getPlayoffRace(teams, conference, 10);
   return (
     <div>
-      <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2 px-1 flex items-center gap-2">
-        <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
-        {conference} Playoff Race
-      </div>
-      <div className="bg-slate-900/60 rounded-lg border border-slate-800 overflow-hidden">
-        <div className="grid grid-cols-[28px_1fr_32px_32px_32px] gap-2 px-3 py-1.5 text-[10px] text-slate-500 uppercase tracking-wide border-b border-slate-800">
+      <SectionLabel>{conference} Playoff Race</SectionLabel>
+      <div className="bg-slate-900/50 rounded-xl border border-slate-800/80 shadow-sm shadow-black/20 overflow-hidden">
+        <div className="grid grid-cols-[28px_1fr_32px_32px_32px] gap-2 px-3 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-800/80">
           <span>Seed</span>
           <span>Team</span>
           <span className="text-right">W</span>
@@ -66,11 +67,11 @@ function PlayoffRaceTable({ conference, teams, leagueId, myTeamId }) {
         {race.map((t, i) => (
           <div
             key={t.teamId}
-            className={`grid grid-cols-[28px_1fr_32px_32px_32px] gap-2 items-center px-3 py-1.5 text-sm ${
-              i !== race.length - 1 ? "border-b border-slate-800/60" : ""
-            } ${i >= 7 ? "opacity-50" : ""}`}
+            className={`grid grid-cols-[28px_1fr_32px_32px_32px] gap-2 items-center px-3 py-2 text-sm hover:bg-slate-800/30 transition-colors ${
+              i !== race.length - 1 ? "border-b border-slate-800/50" : ""
+            } ${i >= 7 ? "opacity-45" : ""}`}
           >
-            <span className="text-slate-500 tabular-nums text-xs">{t.seed}</span>
+            <span className="text-slate-500 tabular-nums text-xs font-medium">{t.seed}</span>
             <TeamLink team={t} leagueId={leagueId} myTeamId={myTeamId} />
             <span className="text-slate-300 tabular-nums text-right text-xs">{t.totalWins}</span>
             <span className="text-slate-300 tabular-nums text-right text-xs">{t.totalLosses}</span>
@@ -78,7 +79,7 @@ function PlayoffRaceTable({ conference, teams, leagueId, myTeamId }) {
           </div>
         ))}
       </div>
-      <div className="text-[10px] text-slate-600 mt-1 px-1">Seeds 1-7 make the playoffs</div>
+      <div className="text-[11px] text-slate-600 mt-1.5 px-1">Seeds 1-7 make the playoffs</div>
     </div>
   );
 }
@@ -87,8 +88,8 @@ function DivisionTable({ divisionName, teams, leagueId, myTeamId }) {
   return (
     <div className="mb-4">
       <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-1">{divisionName}</div>
-      <div className="bg-slate-900/60 rounded-lg border border-slate-800 overflow-hidden">
-        <div className="grid grid-cols-[1fr_auto_28px_28px_28px] gap-2 px-3 py-1 text-[10px] text-slate-500 uppercase tracking-wide border-b border-slate-800">
+      <div className="bg-slate-900/50 rounded-xl border border-slate-800/80 shadow-sm shadow-black/20 overflow-hidden">
+        <div className="grid grid-cols-[1fr_auto_28px_28px_28px] gap-2 px-3 py-1.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-800/80">
           <span>Team</span>
           <span></span>
           <span className="text-right">W</span>
@@ -98,8 +99,8 @@ function DivisionTable({ divisionName, teams, leagueId, myTeamId }) {
         {teams.map((t, i) => (
           <div
             key={t.teamId}
-            className={`grid grid-cols-[1fr_auto_28px_28px_28px] gap-2 items-center px-3 py-1.5 text-sm ${
-              i !== teams.length - 1 ? "border-b border-slate-800/60" : ""
+            className={`grid grid-cols-[1fr_auto_28px_28px_28px] gap-2 items-center px-3 py-2 text-sm hover:bg-slate-800/30 transition-colors ${
+              i !== teams.length - 1 ? "border-b border-slate-800/50" : ""
             }`}
           >
             <TeamLink team={t} leagueId={leagueId} myTeamId={myTeamId} />
@@ -118,10 +119,7 @@ function StandingsColumn({ conference, divisions, leagueId, myTeamId }) {
   const divisionsInOrder = DIVISION_ORDER.filter((d) => d.startsWith(conference) && divisions[d]);
   return (
     <div>
-      <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3 px-1 flex items-center gap-2">
-        <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
-        {conference} Standings
-      </div>
+      <SectionLabel>{conference} Standings</SectionLabel>
       {divisionsInOrder.map((d) => (
         <DivisionTable key={d} divisionName={d} teams={divisions[d]} leagueId={leagueId} myTeamId={myTeamId} />
       ))}
@@ -133,9 +131,9 @@ function StatsPlaceholderSection({ title }) {
   return (
     <div className="mb-4">
       <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-1">{title}</div>
-      <div className="bg-slate-900/60 rounded-lg border border-dashed border-slate-800 overflow-hidden">
+      <div className="bg-slate-900/40 rounded-xl border border-dashed border-slate-800 overflow-hidden">
         {[1, 2, 3, 4, 5].map((n) => (
-          <div key={n} className={`flex items-center gap-2 px-3 py-1.5 text-sm ${n !== 5 ? "border-b border-slate-800/40" : ""}`}>
+          <div key={n} className={`flex items-center gap-2 px-3 py-1.5 text-sm ${n !== 5 ? "border-b border-slate-800/30" : ""}`}>
             <span className="text-slate-700 tabular-nums text-xs w-4">{n}</span>
             <span className="text-slate-700 italic flex-1">Awaiting player data</span>
             <span className="text-slate-800 tabular-nums text-xs">--</span>
@@ -173,34 +171,31 @@ export default async function OverviewPage({ searchParams }) {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="max-w-[1500px] mx-auto px-6 py-6">
-        <div className="flex items-baseline justify-between mb-6">
-          <h1 className="text-xl font-bold text-slate-100">League Overview</h1>
+      <div className="max-w-[1500px] mx-auto px-6 py-7">
+        <div className="flex items-baseline justify-between mb-7">
+          <h1 className="text-2xl font-bold text-slate-50 tracking-tight">League Overview</h1>
           <div className="flex items-center gap-3 text-xs text-slate-500">
-            {week != null && <span>Week {week}</span>}
-            <span>·</span>
+            {week != null && <span className="font-medium text-slate-400">Week {week}</span>}
+            <span className="text-slate-700">·</span>
             <span>Updated {new Date(latest.received_at).toLocaleString()}</span>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_320px] gap-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 lg:col-span-2">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_320px] gap-7">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-7 lg:col-span-2">
             <StandingsColumn conference="AFC" divisions={byDivision.AFC} leagueId={leagueId} myTeamId={myTeamId} />
             <StandingsColumn conference="NFC" divisions={byDivision.NFC} leagueId={leagueId} myTeamId={myTeamId} />
           </div>
 
           <div>
             <PlayoffRaceTable conference="AFC" teams={teams} leagueId={leagueId} myTeamId={myTeamId} />
-            <div className="mt-5">
+            <div className="mt-6">
               <PlayoffRaceTable conference="NFC" teams={teams} leagueId={leagueId} myTeamId={myTeamId} />
             </div>
 
-            <div className="mt-6">
-              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3 px-1 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
-                Stat Leaders
-              </div>
-              <div className="text-[10px] text-slate-600 mb-3 px-1 -mt-2">Awaiting a player-data export type</div>
+            <div className="mt-7">
+              <SectionLabel>Stat Leaders</SectionLabel>
+              <div className="text-[11px] text-slate-600 mb-3 px-1 -mt-3">Awaiting a player-data export type</div>
               <StatsPlaceholderSection title="Passing Yards" />
               <StatsPlaceholderSection title="Rushing Yards" />
               <StatsPlaceholderSection title="Receiving Yards" />

@@ -27,15 +27,15 @@ function GameRow({ game, teamsById, leagueId }) {
   const isFinal = game.status === 3;
 
   return (
-    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-3 py-2 border-b border-slate-800/60 last:border-0">
+    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-3.5 py-2.5 border-b border-slate-800/50 last:border-0 hover:bg-slate-800/20 transition-colors">
       <TeamLabel team={away} leagueId={leagueId} />
-      <div className="text-center min-w-[70px]">
+      <div className="text-center min-w-[74px]">
         {isFinal ? (
           <div className="text-sm font-bold tabular-nums text-slate-100">
             {game.awayScore} - {game.homeScore}
           </div>
         ) : (
-          <div className="text-[10px] text-slate-500 uppercase tracking-wide">Scheduled</div>
+          <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Scheduled</div>
         )}
       </div>
       <TeamLabel team={home} leagueId={leagueId} align="right" />
@@ -64,27 +64,27 @@ export default async function SchedulePage({ searchParams }) {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="max-w-[900px] mx-auto px-6 py-6">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-xl font-bold text-slate-100">Schedule</h1>
-          <Link href={`/?league=${leagueId}`} className="text-xs text-slate-500 hover:text-slate-300">
+      <div className="max-w-[900px] mx-auto px-6 py-7">
+        <div className="flex items-center justify-between mb-7">
+          <h1 className="text-2xl font-bold text-slate-50 tracking-tight">Schedule</h1>
+          <Link href={`/?league=${leagueId}`} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
             ← Back to overview
           </Link>
         </div>
 
-        {weeks.map((w) => {
-          const games = w.payload.gameScheduleInfoList || [];
-          return (
-            <div key={w.week} className="mb-6">
-              <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-1">Week {w.week}</div>
-              <div className="bg-slate-900/60 rounded-lg border border-slate-800 overflow-hidden">
-                {games.map((g) => (
-                  <GameRow key={g.scheduleId} game={g} teamsById={teamsById} leagueId={leagueId} />
-                ))}
-              </div>
+        {weeks.map((w) => (
+          <div key={w.week} className="mb-6">
+            <div className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 px-1 flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+              Week {w.week}
             </div>
-          );
-        })}
+            <div className="bg-slate-900/50 rounded-xl border border-slate-800/80 shadow-sm shadow-black/20 overflow-hidden">
+              {(w.payload.gameScheduleInfoList || []).map((g) => (
+                <GameRow key={g.scheduleId} game={g} teamsById={teamsById} leagueId={leagueId} />
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
