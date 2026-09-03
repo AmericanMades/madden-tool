@@ -1,22 +1,11 @@
 // app/page.js
 //
-// Now a Server Component that queries the database directly at
-// request time — no more static JSON file. Shows whatever the most
-// recent "standings" export actually was, so this updates
-// automatically every time a new export comes in.
-//
-// Redesigned closer to the NeonSportz reference: playoff race tables
-// with explicit Seed/Team/W/L/T columns, and division standings
-// grouped side by side — same information architecture, kept in our
-// own dark, uncluttered theme rather than copying their visual style
-// directly.
+// Team names are now links to /team/[teamId].
 
+import Link from "next/link";
 import { getLatestExport } from "../lib/db";
 import { decodeStreak, groupByDivision, getPlayoffRace, TEAM_COLORS } from "../lib/madden";
 
-// Hardcoded for now — this tool currently tracks one league. If you
-// ever track more than one, this (and the DB query) would need to
-// become dynamic instead.
 const USERNAME = "taylor";
 const LEAGUE_ID = "2207259";
 
@@ -41,9 +30,15 @@ function StreakBadge({ value }) {
   );
 }
 
-// Playoff race table — Seed / Team / W / L / T columns, matching the
-// reference's structure. Seeds 1-7 are real playoff spots; the rest
-// are shown dimmed as "on the outside looking in".
+function TeamLink({ team }) {
+  return (
+    <Link href={`/team/${team.teamId}`} className="flex items-center gap-1.5 min-w-0 hover:underline">
+      <TeamDot name={team.teamName} />
+      <span className="text-slate-200 font-medium truncate">{team.teamName}</span>
+    </Link>
+  );
+}
+
 function PlayoffRaceTable({ conference, teams }) {
   const race = getPlayoffRace(teams, conference, 10);
   return (
@@ -68,10 +63,7 @@ function PlayoffRaceTable({ conference, teams }) {
             } ${i >= 7 ? "opacity-50" : ""}`}
           >
             <span className="text-slate-500 tabular-nums text-xs">{t.seed}</span>
-            <span className="flex items-center gap-1.5 min-w-0">
-              <TeamDot name={t.teamName} />
-              <span className="text-slate-200 font-medium truncate">{t.teamName}</span>
-            </span>
+            <TeamLink team={t} />
             <span className="text-slate-300 tabular-nums text-right text-xs">{t.totalWins}</span>
             <span className="text-slate-300 tabular-nums text-right text-xs">{t.totalLosses}</span>
             <span className="text-slate-300 tabular-nums text-right text-xs">{t.totalTies}</span>
@@ -104,10 +96,7 @@ function DivisionTable({ divisionName, teams }) {
               i !== teams.length - 1 ? "border-b border-slate-800/60" : ""
             }`}
           >
-            <span className="flex items-center gap-1.5 min-w-0">
-              <TeamDot name={t.teamName} />
-              <span className="text-slate-200 font-medium truncate">{t.teamName}</span>
-            </span>
+            <TeamLink team={t} />
             <StreakBadge value={t.winLossStreak} />
             <span className="text-slate-300 tabular-nums text-right text-xs">{t.totalWins}</span>
             <span className="text-slate-300 tabular-nums text-right text-xs">{t.totalLosses}</span>
