@@ -1,13 +1,16 @@
 // app/page.js
 //
-// Team names are now links to /team/[teamId].
+// Now league-aware: reads ?league= from the URL, falling back to the
+// one known league if absent (so old links/bookmarks still work).
+// Also highlights the user's own team (from league_settings) in the
+// standings tables.
 
 import Link from "next/link";
-import { getLatestExport } from "../lib/db";
+import { getLatestExport, getLeagueSettings } from "../lib/db";
 import { decodeStreak, groupByDivision, getPlayoffRace, TEAM_COLORS } from "../lib/madden";
 
 const USERNAME = "taylor";
-const LEAGUE_ID = "2207259";
+const DEFAULT_LEAGUE_ID = "2207259";
 
 const DIVISION_ORDER = ["AFC East", "AFC North", "AFC South", "AFC West", "NFC East", "NFC North", "NFC South", "NFC West"];
 
@@ -30,16 +33,21 @@ function StreakBadge({ value }) {
   );
 }
 
-function TeamLink({ team }) {
+function TeamLink({ team, leagueId, myTeamId }) {
+  const isMine = myTeamId && String(team.teamId) === String(myTeamId);
   return (
-    <Link href={`/team/${team.teamId}`} className="flex items-center gap-1.5 min-w-0 hover:underline">
+    <Link
+      href={`/team/${team.teamId}?league=${leagueId}`}
+      className={`flex items-center gap-1.5 min-w-0 hover:underline ${isMine ? "font-bold" : ""}`}
+    >
       <TeamDot name={team.teamName} />
-      <span className="text-slate-200 font-medium truncate">{team.teamName}</span>
+      <span className={`font-medium truncate ${isMine ? "text-amber-400" : "text-slate-200"}`}>{team.teamName}</span>
+      {isMine && <span className="text-[9px] text-amber-500">★</span>}
     </Link>
   );
 }
 
-function PlayoffRaceTable({ conference, teams }) {
+function PlayoffRaceTable({ conference, teams, leagueId, myTeamId }) {
   const race = getPlayoffRace(teams, conference, 10);
   return (
     <div>
@@ -63,7 +71,7 @@ function PlayoffRaceTable({ conference, teams }) {
             } ${i >= 7 ? "opacity-50" : ""}`}
           >
             <span className="text-slate-500 tabular-nums text-xs">{t.seed}</span>
-            <TeamLink team={t} />
+            <TeamLink team={t} leagueId={leagueId} myTeamId={myTeamId} />
             <span className="text-slate-300 tabular-nums text-right text-xs">{t.totalWins}</span>
             <span className="text-slate-300 tabular-nums text-right text-xs">{t.totalLosses}</span>
             <span className="text-slate-300 tabular-nums text-right text-xs">{t.totalTies}</span>
@@ -75,12 +83,10 @@ function PlayoffRaceTable({ conference, teams }) {
   );
 }
 
-function DivisionTable({ divisionName, teams }) {
+function DivisionTable({ divisionName, teams, leagueId, myTeamId }) {
   return (
     <div className="mb-4">
-      <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-1">
-        {divisionName}
-      </div>
+      <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-1">{divisionName}</div>
       <div className="bg-slate-900/60 rounded-lg border border-slate-800 overflow-hidden">
         <div className="grid grid-cols-[1fr_auto_28px_28px_28px] gap-2 px-3 py-1 text-[10px] text-slate-500 uppercase tracking-wide border-b border-slate-800">
           <span>Team</span>
@@ -96,7 +102,7 @@ function DivisionTable({ divisionName, teams }) {
               i !== teams.length - 1 ? "border-b border-slate-800/60" : ""
             }`}
           >
-            <TeamLink team={t} />
+            <TeamLink team={t} leagueId={leagueId} myTeamId={myTeamId} />
             <StreakBadge value={t.winLossStreak} />
             <span className="text-slate-300 tabular-nums text-right text-xs">{t.totalWins}</span>
             <span className="text-slate-300 tabular-nums text-right text-xs">{t.totalLosses}</span>
@@ -108,7 +114,7 @@ function DivisionTable({ divisionName, teams }) {
   );
 }
 
-function StandingsColumn({ conference, divisions }) {
+function StandingsColumn({ conference, divisions, leagueId, myTeamId }) {
   const divisionsInOrder = DIVISION_ORDER.filter((d) => d.startsWith(conference) && divisions[d]);
   return (
     <div>
@@ -117,7 +123,7 @@ function StandingsColumn({ conference, divisions }) {
         {conference} Standings
       </div>
       {divisionsInOrder.map((d) => (
-        <DivisionTable key={d} divisionName={d} teams={divisions[d]} />
+        <DivisionTable key={d} divisionName={d} teams={divisions[d]} leagueId={leagueId} myTeamId={myTeamId} />
       ))}
     </div>
   );
@@ -129,10 +135,7 @@ function StatsPlaceholderSection({ title }) {
       <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-1">{title}</div>
       <div className="bg-slate-900/60 rounded-lg border border-dashed border-slate-800 overflow-hidden">
         {[1, 2, 3, 4, 5].map((n) => (
-          <div
-            key={n}
-            className={`flex items-center gap-2 px-3 py-1.5 text-sm ${n !== 5 ? "border-b border-slate-800/40" : ""}`}
-          >
+          <div key={n} className={`flex items-center gap-2 px-3 py-1.5 text-sm ${n !== 5 ? "border-b border-slate-800/40" : ""}`}>
             <span className="text-slate-700 tabular-nums text-xs w-4">{n}</span>
             <span className="text-slate-700 italic flex-1">Awaiting player data</span>
             <span className="text-slate-800 tabular-nums text-xs">--</span>
@@ -143,17 +146,21 @@ function StatsPlaceholderSection({ title }) {
   );
 }
 
-export default async function OverviewPage() {
-  const latest = await getLatestExport({ username: USERNAME, leagueId: LEAGUE_ID, exportType: "standings" });
+export default async function OverviewPage({ searchParams }) {
+  const params = await searchParams;
+  const leagueId = params.league || DEFAULT_LEAGUE_ID;
+
+  const [latest, settings] = await Promise.all([
+    getLatestExport({ username: USERNAME, leagueId, exportType: "standings" }),
+    getLeagueSettings({ username: USERNAME, leagueId }),
+  ]);
 
   if (!latest) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-10 text-center">
         <div>
           <div className="text-lg font-semibold mb-2">No standings data yet</div>
-          <div className="text-sm text-slate-500">
-            Trigger a standings export from the Madden Companion App and this page will populate automatically.
-          </div>
+          <div className="text-sm text-slate-500">Trigger a standings export and this page will populate automatically.</div>
         </div>
       </div>
     );
@@ -162,6 +169,7 @@ export default async function OverviewPage() {
   const teams = latest.payload.teamStandingInfoList;
   const byDivision = groupByDivision(teams);
   const week = latest.week || teams[0]?.weekIndex || null;
+  const myTeamId = settings?.my_team_id ?? null;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -177,14 +185,14 @@ export default async function OverviewPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_320px] gap-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 lg:col-span-2">
-            <StandingsColumn conference="AFC" divisions={byDivision.AFC} />
-            <StandingsColumn conference="NFC" divisions={byDivision.NFC} />
+            <StandingsColumn conference="AFC" divisions={byDivision.AFC} leagueId={leagueId} myTeamId={myTeamId} />
+            <StandingsColumn conference="NFC" divisions={byDivision.NFC} leagueId={leagueId} myTeamId={myTeamId} />
           </div>
 
           <div>
-            <PlayoffRaceTable conference="AFC" teams={teams} />
+            <PlayoffRaceTable conference="AFC" teams={teams} leagueId={leagueId} myTeamId={myTeamId} />
             <div className="mt-5">
-              <PlayoffRaceTable conference="NFC" teams={teams} />
+              <PlayoffRaceTable conference="NFC" teams={teams} leagueId={leagueId} myTeamId={myTeamId} />
             </div>
 
             <div className="mt-6">
