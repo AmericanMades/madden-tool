@@ -1,8 +1,15 @@
 // app/schedule/page.js
+//
+// Now shows one week at a time via a dropdown selector spanning
+// whatever season types actually exist in your data (preseason /
+// regular / postseason) — built from real distinct (season_type,
+// week) combinations in the database, not a hardcoded list, so it
+// only ever shows weeks you've actually exported.
 
 import Link from "next/link";
-import { getLatestExport, getAllWeeksForExportType } from "../../lib/db";
+import { getLatestExport, getScheduleWeekOptions, getScheduleForWeek } from "../../lib/db";
 import { TEAM_COLORS } from "../../lib/madden";
+import WeekSelector from "../components/WeekSelector";
 
 const USERNAME = "taylor";
 const DEFAULT_LEAGUE_ID = "2207259";
@@ -47,10 +54,12 @@ export default async function SchedulePage({ searchParams }) {
   const sp = await searchParams;
   const leagueId = sp.league || DEFAULT_LEAGUE_ID;
 
-  const standingsExport = await getLatestExport({ username: USERNAME, leagueId, exportType: "standings" });
-  const weeks = await getAllWeeksForExportType({ username: USERNAME, leagueId, exportType: "week_schedules" });
+  const [standingsExport, options] = await Promise.all([
+    getLatestExport({ username: USERNAME, leagueId, exportType: "standings" }),
+    getScheduleWeekOptions({ username: USERNAME, leagueId }),
+  ]);
 
-  if (!standingsExport || weeks.length === 0) {
+  if (!standingsExport || options.length === 0) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-10 text-center">
         <div className="text-sm text-slate-500">No schedule data yet.</div>
@@ -58,33 +67,50 @@ export default async function SchedulePage({ searchParams }) {
     );
   }
 
+  // Default to whatever the last option is (usually the most recent
+  // week exported) unless a specific one was requested via the URL.
+  const requestedSeasonType = sp.seasonType;
+  const requestedWeek = sp.week;
+  const current =
+    options.find((o) => o.season_type === requestedSeasonType && String(o.week) === String(requestedWeek)) ||
+    options[options.length - 1];
+
+  const weekData = await getScheduleForWeek({
+    username: USERNAME,
+    leagueId,
+    seasonType: current.season_type,
+    week: current.week,
+  });
+
   const teams = standingsExport.payload.teamStandingInfoList;
   const teamsById = {};
   for (const t of teams) teamsById[t.teamId] = t;
 
+  const games = weekData?.payload?.gameScheduleInfoList || [];
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="max-w-[900px] mx-auto px-6 py-7">
-        <div className="flex items-center justify-between mb-7">
+        <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-slate-50 tracking-tight">Schedule</h1>
           <Link href={`/?league=${leagueId}`} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
             ← Back to overview
           </Link>
         </div>
 
-        {weeks.map((w) => (
-          <div key={w.week} className="mb-6">
-            <div className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 px-1 flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-              Week {w.week}
-            </div>
-            <div className="bg-slate-900/50 rounded-xl border border-slate-800/80 shadow-sm shadow-black/20 overflow-hidden">
-              {(w.payload.gameScheduleInfoList || []).map((g) => (
-                <GameRow key={g.scheduleId} game={g} teamsById={teamsById} leagueId={leagueId} />
-              ))}
-            </div>
+        <div className="mb-5">
+          <WeekSelector options={options} current={current} leagueId={leagueId} />
+        </div>
+
+        {games.length === 0 ? (
+          <div className="text-sm text-slate-500 px-1">No games found for this week.</div>
+        ) : (
+          <div className="bg-slate-900/50 rounded-xl border border-slate-800/80 shadow-sm shadow-black/20 overflow-hidden">
+            {games.map((g) => (
+              <GameRow key={g.scheduleId} game={g} teamsById={teamsById} leagueId={leagueId} />
+            ))}
           </div>
-        ))}
+        )}
       </div>
     </div>
   );
