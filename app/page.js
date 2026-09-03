@@ -1,12 +1,24 @@
 // app/page.js
 //
-// Overview page. Standings and playoff race are built from REAL data
-// (the Week 14 standings export). The stats leaders section is a
-// clearly-labeled placeholder — this export type has no player-level
-// data at all, so there's nothing real to show there yet.
+// Now a Server Component that queries the database directly at
+// request time — no more static JSON file. Shows whatever the most
+// recent "standings" export actually was, so this updates
+// automatically every time a new export comes in.
+//
+// Redesigned closer to the NeonSportz reference: playoff race tables
+// with explicit Seed/Team/W/L/T columns, and division standings
+// grouped side by side — same information architecture, kept in our
+// own dark, uncluttered theme rather than copying their visual style
+// directly.
 
-import standingsData from "../sample-standings.json";
+import { getLatestExport } from "../lib/db";
 import { decodeStreak, groupByDivision, getPlayoffRace, TEAM_COLORS } from "../lib/madden";
+
+// Hardcoded for now — this tool currently tracks one league. If you
+// ever track more than one, this (and the DB query) would need to
+// become dynamic instead.
+const USERNAME = "taylor";
+const LEAGUE_ID = "2207259";
 
 const DIVISION_ORDER = ["AFC East", "AFC North", "AFC South", "AFC West", "NFC East", "NFC North", "NFC South", "NFC West"];
 
@@ -29,6 +41,48 @@ function StreakBadge({ value }) {
   );
 }
 
+// Playoff race table — Seed / Team / W / L / T columns, matching the
+// reference's structure. Seeds 1-7 are real playoff spots; the rest
+// are shown dimmed as "on the outside looking in".
+function PlayoffRaceTable({ conference, teams }) {
+  const race = getPlayoffRace(teams, conference, 10);
+  return (
+    <div>
+      <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2 px-1 flex items-center gap-2">
+        <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+        {conference} Playoff Race
+      </div>
+      <div className="bg-slate-900/60 rounded-lg border border-slate-800 overflow-hidden">
+        <div className="grid grid-cols-[28px_1fr_32px_32px_32px] gap-2 px-3 py-1.5 text-[10px] text-slate-500 uppercase tracking-wide border-b border-slate-800">
+          <span>Seed</span>
+          <span>Team</span>
+          <span className="text-right">W</span>
+          <span className="text-right">L</span>
+          <span className="text-right">T</span>
+        </div>
+        {race.map((t, i) => (
+          <div
+            key={t.teamId}
+            className={`grid grid-cols-[28px_1fr_32px_32px_32px] gap-2 items-center px-3 py-1.5 text-sm ${
+              i !== race.length - 1 ? "border-b border-slate-800/60" : ""
+            } ${i >= 7 ? "opacity-50" : ""}`}
+          >
+            <span className="text-slate-500 tabular-nums text-xs">{t.seed}</span>
+            <span className="flex items-center gap-1.5 min-w-0">
+              <TeamDot name={t.teamName} />
+              <span className="text-slate-200 font-medium truncate">{t.teamName}</span>
+            </span>
+            <span className="text-slate-300 tabular-nums text-right text-xs">{t.totalWins}</span>
+            <span className="text-slate-300 tabular-nums text-right text-xs">{t.totalLosses}</span>
+            <span className="text-slate-300 tabular-nums text-right text-xs">{t.totalTies}</span>
+          </div>
+        ))}
+      </div>
+      <div className="text-[10px] text-slate-600 mt-1 px-1">Seeds 1-7 make the playoffs</div>
+    </div>
+  );
+}
+
 function DivisionTable({ divisionName, teams }) {
   return (
     <div className="mb-4">
@@ -36,18 +90,28 @@ function DivisionTable({ divisionName, teams }) {
         {divisionName}
       </div>
       <div className="bg-slate-900/60 rounded-lg border border-slate-800 overflow-hidden">
+        <div className="grid grid-cols-[1fr_auto_28px_28px_28px] gap-2 px-3 py-1 text-[10px] text-slate-500 uppercase tracking-wide border-b border-slate-800">
+          <span>Team</span>
+          <span></span>
+          <span className="text-right">W</span>
+          <span className="text-right">L</span>
+          <span className="text-right">T</span>
+        </div>
         {teams.map((t, i) => (
           <div
             key={t.teamId}
-            className={`flex items-center gap-2 px-3 py-1.5 text-sm ${i !== teams.length - 1 ? "border-b border-slate-800/60" : ""}`}
+            className={`grid grid-cols-[1fr_auto_28px_28px_28px] gap-2 items-center px-3 py-1.5 text-sm ${
+              i !== teams.length - 1 ? "border-b border-slate-800/60" : ""
+            }`}
           >
-            <TeamDot name={t.teamName} />
-            <span className="text-slate-200 font-medium flex-1 truncate">{t.teamName}</span>
-            <StreakBadge value={t.winLossStreak} />
-            <span className="text-slate-400 tabular-nums w-14 text-right">
-              {t.totalWins}-{t.totalLosses}{t.totalTies > 0 ? `-${t.totalTies}` : ""}
+            <span className="flex items-center gap-1.5 min-w-0">
+              <TeamDot name={t.teamName} />
+              <span className="text-slate-200 font-medium truncate">{t.teamName}</span>
             </span>
-            <span className="text-slate-500 tabular-nums w-10 text-right text-xs">{t.divWins}-{t.divLosses}</span>
+            <StreakBadge value={t.winLossStreak} />
+            <span className="text-slate-300 tabular-nums text-right text-xs">{t.totalWins}</span>
+            <span className="text-slate-300 tabular-nums text-right text-xs">{t.totalLosses}</span>
+            <span className="text-slate-300 tabular-nums text-right text-xs">{t.totalTies}</span>
           </div>
         ))}
       </div>
@@ -59,42 +123,13 @@ function StandingsColumn({ conference, divisions }) {
   const divisionsInOrder = DIVISION_ORDER.filter((d) => d.startsWith(conference) && divisions[d]);
   return (
     <div>
-      <div className="text-sm font-bold text-slate-300 mb-3 flex items-center justify-between px-1">
-        <span>{conference}</span>
-        <span className="text-[10px] font-normal text-slate-600 tabular-nums">DIV</span>
+      <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3 px-1 flex items-center gap-2">
+        <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+        {conference} Standings
       </div>
       {divisionsInOrder.map((d) => (
         <DivisionTable key={d} divisionName={d} teams={divisions[d]} />
       ))}
-    </div>
-  );
-}
-
-function PlayoffRaceColumn({ conference, teams }) {
-  const race = getPlayoffRace(teams, conference, 10);
-  return (
-    <div className="mb-5">
-      <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-1">
-        {conference} Playoff Race
-      </div>
-      <div className="bg-slate-900/60 rounded-lg border border-slate-800 overflow-hidden">
-        {race.map((t, i) => (
-          <div
-            key={t.teamId}
-            className={`flex items-center gap-2 px-3 py-1.5 text-sm ${i !== race.length - 1 ? "border-b border-slate-800/60" : ""} ${
-              i < 7 ? "" : "opacity-60"
-            }`}
-          >
-            <span className="text-slate-600 tabular-nums text-xs w-4">{t.seed}</span>
-            <TeamDot name={t.teamName} />
-            <span className="text-slate-200 font-medium flex-1 truncate">{t.teamName}</span>
-            <span className="text-slate-400 tabular-nums text-xs">
-              {t.totalWins}-{t.totalLosses}{t.totalTies > 0 ? `-${t.totalTies}` : ""}
-            </span>
-          </div>
-        ))}
-      </div>
-      <div className="text-[10px] text-slate-600 mt-1 px-1">Seeds 1-7 make the playoffs; 8+ are on the outside</div>
     </div>
   );
 }
@@ -119,39 +154,59 @@ function StatsPlaceholderSection({ title }) {
   );
 }
 
-export default function OverviewPage() {
-  const teams = standingsData.teamStandingInfoList;
+export default async function OverviewPage() {
+  const latest = await getLatestExport({ username: USERNAME, leagueId: LEAGUE_ID, exportType: "standings" });
+
+  if (!latest) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-10 text-center">
+        <div>
+          <div className="text-lg font-semibold mb-2">No standings data yet</div>
+          <div className="text-sm text-slate-500">
+            Trigger a standings export from the Madden Companion App and this page will populate automatically.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const teams = latest.payload.teamStandingInfoList;
   const byDivision = groupByDivision(teams);
-  const week = teams[0]?.weekIndex ?? null;
+  const week = latest.week || teams[0]?.weekIndex || null;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="max-w-[1500px] mx-auto px-6 py-6">
         <div className="flex items-baseline justify-between mb-6">
           <h1 className="text-xl font-bold text-slate-100">League Overview</h1>
-          {week != null && <span className="text-xs text-slate-500">Week {week}</span>}
+          <div className="flex items-center gap-3 text-xs text-slate-500">
+            {week != null && <span>Week {week}</span>}
+            <span>·</span>
+            <span>Updated {new Date(latest.received_at).toLocaleString()}</span>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_320px] gap-6">
-          {/* Left: full standings, AFC + NFC */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 lg:col-span-2">
             <StandingsColumn conference="AFC" divisions={byDivision.AFC} />
             <StandingsColumn conference="NFC" divisions={byDivision.NFC} />
           </div>
 
-          {/* Right: stats placeholder + playoff race stacked */}
           <div>
-            <div className="text-sm font-bold text-slate-300 mb-3 px-1">Stat Leaders</div>
-            <div className="text-[10px] text-slate-600 mb-3 px-1 -mt-2">
-              Placeholder — this export type has no player data yet
+            <PlayoffRaceTable conference="AFC" teams={teams} />
+            <div className="mt-5">
+              <PlayoffRaceTable conference="NFC" teams={teams} />
             </div>
-            <StatsPlaceholderSection title="Passing Yards" />
-            <StatsPlaceholderSection title="Rushing Yards" />
-            <StatsPlaceholderSection title="Receiving Yards" />
 
             <div className="mt-6">
-              <PlayoffRaceColumn conference="AFC" teams={teams} />
-              <PlayoffRaceColumn conference="NFC" teams={teams} />
+              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3 px-1 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+                Stat Leaders
+              </div>
+              <div className="text-[10px] text-slate-600 mb-3 px-1 -mt-2">Awaiting a player-data export type</div>
+              <StatsPlaceholderSection title="Passing Yards" />
+              <StatsPlaceholderSection title="Rushing Yards" />
+              <StatsPlaceholderSection title="Receiving Yards" />
             </div>
           </div>
         </div>
