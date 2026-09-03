@@ -1,10 +1,9 @@
 // app/schedule/page.js
 //
-// Now shows one week at a time via a dropdown selector spanning
-// whatever season types actually exist in your data (preseason /
-// regular / postseason) — built from real distinct (season_type,
-// week) combinations in the database, not a hardcoded list, so it
-// only ever shows weeks you've actually exported.
+// Uses the real weekIndex from inside each game object, not the
+// export URL's week segment — that turned out to always be "0"
+// regardless of the actual week (confirmed: a real payload showed
+// weekIndex: 14 while its URL said week/reg/0/schedules).
 
 import Link from "next/link";
 import { getLatestExport, getScheduleWeekOptions, getScheduleForWeek } from "../../lib/db";
@@ -67,20 +66,10 @@ export default async function SchedulePage({ searchParams }) {
     );
   }
 
-  // Default to whatever the last option is (usually the most recent
-  // week exported) unless a specific one was requested via the URL.
-  const requestedSeasonType = sp.seasonType;
-  const requestedWeek = sp.week;
-  const current =
-    options.find((o) => o.season_type === requestedSeasonType && String(o.week) === String(requestedWeek)) ||
-    options[options.length - 1];
+  const requestedWeek = sp.week ? Number(sp.week) : null;
+  const current = options.find((o) => o.real_week === requestedWeek) || options[options.length - 1];
 
-  const weekData = await getScheduleForWeek({
-    username: USERNAME,
-    leagueId,
-    seasonType: current.season_type,
-    week: current.week,
-  });
+  const weekData = await getScheduleForWeek({ username: USERNAME, leagueId, realWeek: current.real_week });
 
   const teams = standingsExport.payload.teamStandingInfoList;
   const teamsById = {};
