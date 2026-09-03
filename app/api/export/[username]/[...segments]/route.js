@@ -8,13 +8,6 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "*",
 };
 
-// FIXED: real URL structure confirmed from an actual export:
-//   /api/export/{username}/{platform}/{leagueId}/team/{teamId}/roster
-// segments = ['xbsx', '2207259', 'team', '777781272', 'roster']
-// Previously, segments[3] (the team ID) was being saved into
-// `statType`, and the sub-type ("roster") was dropped entirely. Now:
-// when segments[2] === "team", segments[3] is recognized as teamId
-// and segments[4] as the sub-type (e.g. "roster") instead.
 function parseMaddenPath(segments = []) {
   const isTeamScoped = segments[2] === "team";
   return {
@@ -27,6 +20,21 @@ function parseMaddenPath(segments = []) {
     teamId: isTeamScoped ? segments[3] || null : null,
     rawSegments: segments,
   };
+}
+
+// FIXED: this is the piece that determines what export_type gets
+// saved to the database. Previously it only used the top-level
+// `type` segment, which meant every weekly stat category (passing,
+// rushing, receiving, defense, kicking, punting, team) all saved as
+// the same generic "week" — completely indistinguishable from each
+// other once in the database. Same problem for freeagents/roster.
+// Now folds in the more specific statType whenever one exists, e.g.
+// "week_passing", "week_rushing", "freeagents_roster", "team_roster".
+function buildExportType(routeInfo) {
+  if (routeInfo.teamId) return `team_${routeInfo.statType}`;
+  if (routeInfo.type === "week") return `week_${routeInfo.statType}`;
+  if (routeInfo.statType) return `${routeInfo.type}_${routeInfo.statType}`;
+  return routeInfo.type;
 }
 
 function safeHeaders(request) {
@@ -53,6 +61,7 @@ async function handleMaddenRequest(request, context) {
   try {
     const { username, segments = [] } = await context.params;
     const routeInfo = parseMaddenPath(segments);
+    const exportType = buildExportType(routeInfo);
     const url = new URL(request.url);
 
     let rawBuffer = new ArrayBuffer(0);
@@ -74,6 +83,7 @@ async function handleMaddenRequest(request, context) {
     console.log("[MADDEN] Platform:", routeInfo.platform);
     console.log("[MADDEN] League ID:", routeInfo.leagueId);
     console.log("[MADDEN] Type:", routeInfo.type);
+    console.log("[MADDEN] Resolved export_type:", exportType);
     console.log("[MADDEN] Team ID:", routeInfo.teamId);
     console.log("[MADDEN] Season Type:", routeInfo.seasonType);
     console.log("[MADDEN] Week:", routeInfo.week);
@@ -141,7 +151,7 @@ async function handleMaddenRequest(request, context) {
           username,
           platform: routeInfo.platform,
           leagueId: routeInfo.leagueId,
-          exportType: routeInfo.teamId ? `team_${routeInfo.statType}` : routeInfo.type,
+          exportType,
           seasonType: routeInfo.seasonType,
           week: routeInfo.week,
           statType: routeInfo.statType,
@@ -149,7 +159,7 @@ async function handleMaddenRequest(request, context) {
           payload: parsedJson,
         });
         dbSaveStatus = "ok";
-        console.log("[MADDEN] Saved to database successfully");
+        console.log("[MADDEN] Saved to database successfully as:", exportType);
       } catch (error) {
         dbSaveStatus = `failed: ${error.message}`;
         console.error("[MADDEN] Database save FAILED:", error);
@@ -164,7 +174,7 @@ async function handleMaddenRequest(request, context) {
     }
 
     return Response.json(
-      { success: true, status: "ok", received: bytes.length, username, route: routeInfo, db: dbSaveStatus },
+      { success: true, status: "ok", received: bytes.length, username, route: routeInfo, exportType, db: dbSaveStatus },
       { status: 200, headers: CORS_HEADERS }
     );
   } catch (error) {
