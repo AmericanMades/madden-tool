@@ -48,6 +48,23 @@ export default function Sidebar() {
       <div className="space-y-1">
         {leagues.map((league) => {
           const isActive = activeLeagueId ? activeLeagueId === league.leagueId : leagues[0]?.leagueId === league.leagueId;
+          const isUnconfigured = !league.myTeamId;
+
+          if (isUnconfigured) {
+            return (
+              <Link
+                key={league.leagueId}
+                href={`/setup?league=${league.leagueId}`}
+                className="flex items-center gap-2 px-2 py-2 rounded-lg text-sm truncate border border-dashed border-amber-500/40 text-amber-400 hover:bg-slate-900"
+              >
+                <span className="w-6 h-6 rounded flex items-center justify-center text-[9px] font-bold bg-amber-500/15 flex-shrink-0">
+                  ?
+                </span>
+                <span className="truncate">{league.label} — set up</span>
+              </Link>
+            );
+          }
+
           return (
             <Link
               key={league.leagueId}
