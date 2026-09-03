@@ -4,6 +4,28 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import { TEAM_COLORS } from "../../lib/madden";
+
+const TEAM_ABBR = {
+  Jets: "NYJ",
+  Dolphins: "MIA",
+  Patriots: "NE",
+  Bills: "BUF",
+};
+
+function TeamBadge({ teamName }) {
+  if (!teamName) return null;
+  const color = TEAM_COLORS[teamName] || "#64748B";
+  const abbr = TEAM_ABBR[teamName] || teamName.slice(0, 3).toUpperCase();
+  return (
+    <span
+      className="inline-flex items-center justify-center w-6 h-6 rounded text-[9px] font-bold text-white flex-shrink-0"
+      style={{ backgroundColor: color }}
+    >
+      {abbr}
+    </span>
+  );
+}
 
 export default function Sidebar() {
   const [leagues, setLeagues] = useState([]);
@@ -30,11 +52,12 @@ export default function Sidebar() {
             <Link
               key={league.leagueId}
               href={`${pathname}?league=${league.leagueId}`}
-              className={`block px-2 py-2 rounded-lg text-sm truncate ${
+              className={`flex items-center gap-2 px-2 py-2 rounded-lg text-sm truncate ${
                 isActive ? "bg-sky-500/15 text-sky-400 font-semibold" : "text-slate-400 hover:bg-slate-900 hover:text-slate-200"
               }`}
             >
-              {league.label}
+              <TeamBadge teamName={league.myTeamName} />
+              <span className="truncate">{league.label}</span>
             </Link>
           );
         })}
