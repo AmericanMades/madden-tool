@@ -8,14 +8,23 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "*",
 };
 
+// FIXED: real URL structure confirmed from an actual export:
+//   /api/export/{username}/{platform}/{leagueId}/team/{teamId}/roster
+// segments = ['xbsx', '2207259', 'team', '777781272', 'roster']
+// Previously, segments[3] (the team ID) was being saved into
+// `statType`, and the sub-type ("roster") was dropped entirely. Now:
+// when segments[2] === "team", segments[3] is recognized as teamId
+// and segments[4] as the sub-type (e.g. "roster") instead.
 function parseMaddenPath(segments = []) {
+  const isTeamScoped = segments[2] === "team";
   return {
     platform: segments[0] || null,
     leagueId: segments[1] || null,
     type: segments[2] || null,
     seasonType: segments[2] === "week" ? segments[3] || null : null,
     week: segments[2] === "week" ? segments[4] || null : null,
-    statType: segments[2] === "week" ? segments[5] || null : segments[3] || null,
+    statType: segments[2] === "week" ? segments[5] || null : isTeamScoped ? segments[4] || null : segments[3] || null,
+    teamId: isTeamScoped ? segments[3] || null : null,
     rawSegments: segments,
   };
 }
@@ -65,6 +74,7 @@ async function handleMaddenRequest(request, context) {
     console.log("[MADDEN] Platform:", routeInfo.platform);
     console.log("[MADDEN] League ID:", routeInfo.leagueId);
     console.log("[MADDEN] Type:", routeInfo.type);
+    console.log("[MADDEN] Team ID:", routeInfo.teamId);
     console.log("[MADDEN] Season Type:", routeInfo.seasonType);
     console.log("[MADDEN] Week:", routeInfo.week);
     console.log("[MADDEN] Stat Type:", routeInfo.statType);
@@ -76,10 +86,6 @@ async function handleMaddenRequest(request, context) {
     console.log("[MADDEN] Content-Length:", request.headers.get("content-length"));
     console.log("[MADDEN] Raw byte size:", bytes.length);
 
-    // Madden sometimes sends bodyless requests (e.g. as a HEAD-style
-    // check before the real payload). Logged but still accepted with
-    // 200 so the app's export sequence continues — nothing to save
-    // to the database in this case since there's no payload.
     if (bytes.length === 0) {
       console.warn("[MADDEN] EMPTY BODY — accepting request so export can continue");
       console.log("[MADDEN REQUEST END]");
@@ -90,14 +96,7 @@ async function handleMaddenRequest(request, context) {
       }
 
       return Response.json(
-        {
-          success: true,
-          status: "ok",
-          warning: "EMPTY_BODY",
-          received: 0,
-          username,
-          route: routeInfo,
-        },
+        { success: true, status: "ok", warning: "EMPTY_BODY", received: 0, username, route: routeInfo },
         { status: 200, headers: CORS_HEADERS }
       );
     }
@@ -135,11 +134,6 @@ async function handleMaddenRequest(request, context) {
       console.log("[MADDEN] First 100 bytes:", Array.from(bytes.slice(0, 100)));
     }
 
-    // Save to the database — only when we actually got valid JSON.
-    // Wrapped so a DB hiccup never breaks the response Madden is
-    // waiting on; the export still "succeeds" from the app's point
-    // of view even if this save fails, and the failure is logged for
-    // us to notice separately.
     let dbSaveStatus = "skipped (not valid JSON)";
     if (validJson && parsedJson !== null) {
       try {
@@ -147,10 +141,11 @@ async function handleMaddenRequest(request, context) {
           username,
           platform: routeInfo.platform,
           leagueId: routeInfo.leagueId,
-          exportType: routeInfo.type,
+          exportType: routeInfo.teamId ? `team_${routeInfo.statType}` : routeInfo.type,
           seasonType: routeInfo.seasonType,
           week: routeInfo.week,
           statType: routeInfo.statType,
+          teamId: routeInfo.teamId,
           payload: parsedJson,
         });
         dbSaveStatus = "ok";
@@ -169,14 +164,7 @@ async function handleMaddenRequest(request, context) {
     }
 
     return Response.json(
-      {
-        success: true,
-        status: "ok",
-        received: bytes.length,
-        username,
-        route: routeInfo,
-        db: dbSaveStatus,
-      },
+      { success: true, status: "ok", received: bytes.length, username, route: routeInfo, db: dbSaveStatus },
       { status: 200, headers: CORS_HEADERS }
     );
   } catch (error) {
