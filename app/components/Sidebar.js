@@ -50,6 +50,10 @@ export default function Sidebar() {
     { label: "My Team", href: current.myTeamId ? `/team/${current.myTeamId}?league=${currentLeagueId}` : null },
     { label: "Schedule", href: `/schedule?league=${currentLeagueId}` },
     { label: "League Leaders", href: `/leaders?league=${currentLeagueId}` },
+    { label: "Free Agents", href: `/free-agents?league=${currentLeagueId}` },
+    { label: "Injury Report", href: `/injuries?league=${currentLeagueId}` },
+    { label: "Cap Space", href: `/cap-space?league=${currentLeagueId}` },
+    { label: "Rookies", href: `/rookies?league=${currentLeagueId}` },
   ];
 
   return (
