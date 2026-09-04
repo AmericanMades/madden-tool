@@ -1,7 +1,7 @@
 // app/page.js
 
 import Link from "next/link";
-import { getLatestExport, getLeagueSettings } from "../lib/db";
+import { getLatestExport, getLeagueSettings, getSeasonStatLeaders } from "../lib/db";
 import { decodeStreak, groupByDivision, getPlayoffRace, TEAM_COLORS } from "../lib/madden";
 
 const USERNAME = "taylor";
@@ -127,17 +127,34 @@ function StandingsColumn({ conference, divisions, leagueId, myTeamId }) {
   );
 }
 
-function StatsPlaceholderSection({ title }) {
+function StatLeaderSection({ title, players, valueKey, leagueId }) {
+  const sorted = [...players].sort((a, b) => b[valueKey] - a[valueKey]).slice(0, 5);
+  if (sorted.length === 0) {
+    return (
+      <div className="mb-4">
+        <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-1">{title}</div>
+        <div className="bg-slate-900/40 rounded-xl border border-dashed border-slate-800 p-4 text-center text-xs text-slate-600 italic">
+          No successful weekly export yet for this stat.
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="mb-4">
       <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-1">{title}</div>
-      <div className="bg-slate-900/40 rounded-xl border border-dashed border-slate-800 overflow-hidden">
-        {[1, 2, 3, 4, 5].map((n) => (
-          <div key={n} className={`flex items-center gap-2 px-3 py-1.5 text-sm ${n !== 5 ? "border-b border-slate-800/30" : ""}`}>
-            <span className="text-slate-700 tabular-nums text-xs w-4">{n}</span>
-            <span className="text-slate-700 italic flex-1">Awaiting player data</span>
-            <span className="text-slate-800 tabular-nums text-xs">--</span>
-          </div>
+      <div className="bg-slate-900/50 rounded-xl border border-slate-800/80 shadow-sm shadow-black/20 overflow-hidden">
+        {sorted.map((p, i) => (
+          <Link
+            key={p.rosterId}
+            href={`/player/${p.teamId}/${p.rosterId}?league=${leagueId}`}
+            className={`flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-slate-800/30 transition-colors ${
+              i !== sorted.length - 1 ? "border-b border-slate-800/40" : ""
+            }`}
+          >
+            <span className="text-slate-700 tabular-nums text-xs w-4">{i + 1}</span>
+            <span className="text-slate-200 flex-1 truncate">{p.fullName}</span>
+            <span className="text-amber-400 font-bold tabular-nums text-xs">{p[valueKey]}</span>
+          </Link>
         ))}
       </div>
     </div>
@@ -148,9 +165,35 @@ export default async function OverviewPage({ searchParams }) {
   const params = await searchParams;
   const leagueId = params.league || DEFAULT_LEAGUE_ID;
 
-  const [latest, settings] = await Promise.all([
+  const [latest, settings, passingLeaders, rushingLeaders, receivingLeaders] = await Promise.all([
     getLatestExport({ username: USERNAME, leagueId, exportType: "standings" }),
     getLeagueSettings({ username: USERNAME, leagueId }),
+    getSeasonStatLeaders({
+      username: USERNAME,
+      leagueId,
+      exportType: "week_passing",
+      listKey: "playerPassingStatInfoList",
+      sumFields: ["passYds", "passTDs", "passInts", "passAtt", "passComp"],
+    }),
+    // NOTE: rushing/receiving field names below are inferred from
+    // Madden's naming pattern seen in passing stats — not yet
+    // directly confirmed against a real successful export. If these
+    // sections show empty despite successful exports existing, the
+    // field names are the first thing to check.
+    getSeasonStatLeaders({
+      username: USERNAME,
+      leagueId,
+      exportType: "week_rushing",
+      listKey: "playerRushingStatInfoList",
+      sumFields: ["rushYds", "rushTDs", "rushAtt"],
+    }),
+    getSeasonStatLeaders({
+      username: USERNAME,
+      leagueId,
+      exportType: "week_receiving",
+      listKey: "playerReceivingStatInfoList",
+      sumFields: ["recYds", "recTDs", "recCatches"],
+    }),
   ]);
 
   if (!latest) {
@@ -195,10 +238,9 @@ export default async function OverviewPage({ searchParams }) {
 
             <div className="mt-7">
               <SectionLabel>Stat Leaders</SectionLabel>
-              <div className="text-[11px] text-slate-600 mb-3 px-1 -mt-3">Awaiting a player-data export type</div>
-              <StatsPlaceholderSection title="Passing Yards" />
-              <StatsPlaceholderSection title="Rushing Yards" />
-              <StatsPlaceholderSection title="Receiving Yards" />
+              <StatLeaderSection title="Passing Yards" players={passingLeaders} valueKey="passYds" leagueId={leagueId} />
+              <StatLeaderSection title="Rushing Yards" players={rushingLeaders} valueKey="rushYds" leagueId={leagueId} />
+              <StatLeaderSection title="Receiving Yards" players={receivingLeaders} valueKey="recYds" leagueId={leagueId} />
             </div>
           </div>
         </div>

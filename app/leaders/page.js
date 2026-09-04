@@ -1,15 +1,17 @@
 // app/leaders/page.js
 //
-// Two kinds of leaders, both from confirmed real data:
-//   1. Team leaders — season stats from the standings export, which
-//      Madden already ranks 1-32 itself.
-//   2. Player leaders by RATING — pulled from every team's roster
-//      export. Note this is ratings (speed, throw power, overall),
-//      NOT performance stats (yards, TDs) — those come from the
-//      weekly player stat exports, which fail on EA's end.
+// Three kinds of leaders now:
+//   1. Team leaders — season stats from standings, Madden's own ranks.
+//   2. Stat leaders — REAL season performance stats (passing/rushing/
+//      receiving yards), aggregated from successful weekly exports.
+//      Passing is confirmed real; rushing/receiving field names are
+//      inferred from the same naming pattern, same caveat as the
+//      overview page.
+//   3. Player leaders by RATING — ratings, not performance, pulled
+//      from every team's roster.
 
 import Link from "next/link";
-import { getLatestExport, getAllRostersForLeague } from "../../lib/db";
+import { getLatestExport, getAllRostersForLeague, getSeasonStatLeaders } from "../../lib/db";
 import { TEAM_COLORS } from "../../lib/madden";
 
 const USERNAME = "taylor";
@@ -24,11 +26,8 @@ function SectionLabel({ children }) {
   );
 }
 
-function TeamLeaderCard({ title, teams, valueKey, rankKey, leagueId, format, lowerIsBetter }) {
-  // Madden already provides a rank for each of these stats, so sort
-  // by that rather than recomputing — it's their own ranking.
+function TeamLeaderCard({ title, teams, valueKey, rankKey, leagueId, format }) {
   const sorted = [...teams].sort((a, b) => a[rankKey] - b[rankKey]).slice(0, 10);
-
   return (
     <div>
       <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-1">{title}</div>
@@ -52,13 +51,46 @@ function TeamLeaderCard({ title, teams, valueKey, rankKey, leagueId, format, low
   );
 }
 
-function PlayerLeaderCard({ title, players, valueKey, subtitle }) {
+function StatLeaderCard({ title, players, valueKey, leagueId }) {
   const sorted = [...players].sort((a, b) => b[valueKey] - a[valueKey]).slice(0, 10);
-
+  if (sorted.length === 0) {
+    return (
+      <div>
+        <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-1">{title}</div>
+        <div className="bg-slate-900/40 rounded-xl border border-dashed border-slate-800 p-4 text-center text-xs text-slate-600 italic">
+          No successful weekly export yet for this stat.
+        </div>
+      </div>
+    );
+  }
   return (
     <div>
       <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-1">{title}</div>
-      {subtitle && <div className="text-[10px] text-slate-600 mb-1.5 px-1 -mt-1">{subtitle}</div>}
+      <div className="bg-slate-900/50 rounded-xl border border-slate-800/80 shadow-sm shadow-black/20 overflow-hidden">
+        {sorted.map((p, i) => (
+          <Link
+            key={p.rosterId}
+            href={`/player/${p.teamId}/${p.rosterId}?league=${leagueId}`}
+            className={`flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-800/30 transition-colors ${
+              i !== sorted.length - 1 ? "border-b border-slate-800/50" : ""
+            }`}
+          >
+            <span className="text-slate-600 tabular-nums text-xs w-4 font-medium">{i + 1}</span>
+            <span className="text-slate-200 font-medium flex-1 truncate">{p.fullName}</span>
+            <span className="text-slate-500 text-[11px]">{p.weeksPlayed}gp</span>
+            <span className="text-amber-400 font-bold tabular-nums w-12 text-right">{p[valueKey]}</span>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PlayerLeaderCard({ title, players, valueKey }) {
+  const sorted = [...players].sort((a, b) => b[valueKey] - a[valueKey]).slice(0, 10);
+  return (
+    <div>
+      <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 px-1">{title}</div>
       <div className="bg-slate-900/50 rounded-xl border border-slate-800/80 shadow-sm shadow-black/20 overflow-hidden">
         {sorted.map((p, i) => (
           <Link
@@ -88,9 +120,30 @@ export default async function LeadersPage({ searchParams }) {
   const sp = await searchParams;
   const leagueId = sp.league || DEFAULT_LEAGUE_ID;
 
-  const [standingsExport, rosters] = await Promise.all([
+  const [standingsExport, rosters, passingLeaders, rushingLeaders, receivingLeaders] = await Promise.all([
     getLatestExport({ username: USERNAME, leagueId, exportType: "standings" }),
     getAllRostersForLeague({ username: USERNAME, leagueId }),
+    getSeasonStatLeaders({
+      username: USERNAME,
+      leagueId,
+      exportType: "week_passing",
+      listKey: "playerPassingStatInfoList",
+      sumFields: ["passYds", "passTDs", "passInts", "passAtt", "passComp"],
+    }),
+    getSeasonStatLeaders({
+      username: USERNAME,
+      leagueId,
+      exportType: "week_rushing",
+      listKey: "playerRushingStatInfoList",
+      sumFields: ["rushYds", "rushTDs", "rushAtt"],
+    }),
+    getSeasonStatLeaders({
+      username: USERNAME,
+      leagueId,
+      exportType: "week_receiving",
+      listKey: "playerReceivingStatInfoList",
+      sumFields: ["recYds", "recTDs", "recCatches"],
+    }),
   ]);
 
   if (!standingsExport) {
@@ -105,24 +158,18 @@ export default async function LeadersPage({ searchParams }) {
   const teamNamesById = {};
   for (const t of teams) teamNamesById[t.teamId] = t.teamName;
 
-  // Flatten every team's roster into one league-wide player list,
-  // tagging each player with their team so leader rows can show it.
   const allPlayers = [];
   for (const r of rosters) {
     const list = r.payload?.rosterInfoList || [];
     for (const p of list) {
       if (p.isFreeAgent) continue;
-      allPlayers.push({
-        ...p,
-        teamId: r.team_id,
-        teamName: teamNamesById[r.team_id] || "—",
-        leagueId,
-      });
+      allPlayers.push({ ...p, teamId: r.team_id, teamName: teamNamesById[r.team_id] || "—", leagueId });
     }
   }
 
   const qbs = allPlayers.filter((p) => p.position === "QB");
   const skillPlayers = allPlayers.filter((p) => ["WR", "TE", "HB"].includes(p.position));
+  const hasStatData = passingLeaders.length > 0 || rushingLeaders.length > 0 || receivingLeaders.length > 0;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -144,12 +191,22 @@ export default async function LeadersPage({ searchParams }) {
           <TeamLeaderCard title="Points Allowed" teams={teams} valueKey="ptsAgainst" rankKey="ptsAgainstRank" leagueId={leagueId} />
         </div>
 
-        {allPlayers.length > 0 ? (
+        <SectionLabel>Stat Leaders — Season</SectionLabel>
+        {!hasStatData && (
+          <div className="text-[11px] text-slate-600 mb-4 px-1 -mt-2">
+            Weekly stat exports fail on EA&apos;s end most of the time — these fill in as successful weekly exports come through.
+          </div>
+        )}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-9">
+          <StatLeaderCard title="Passing Yards" players={passingLeaders} valueKey="passYds" leagueId={leagueId} />
+          <StatLeaderCard title="Rushing Yards" players={rushingLeaders} valueKey="rushYds" leagueId={leagueId} />
+          <StatLeaderCard title="Receiving Yards" players={receivingLeaders} valueKey="recYds" leagueId={leagueId} />
+        </div>
+
+        {allPlayers.length > 0 && (
           <>
             <SectionLabel>Player Leaders — by Rating</SectionLabel>
-            <div className="text-[11px] text-slate-600 mb-4 px-1 -mt-2">
-              Ratings, not season performance — Madden&apos;s weekly player stat exports are currently failing on EA&apos;s end.
-            </div>
+            <div className="text-[11px] text-slate-600 mb-4 px-1 -mt-2">Ratings, not season performance.</div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               <PlayerLeaderCard title="Highest Overall" players={allPlayers} valueKey="playerSchemeOvr" />
               <PlayerLeaderCard title="Fastest Players" players={allPlayers} valueKey="speedRating" />
@@ -162,10 +219,6 @@ export default async function LeadersPage({ searchParams }) {
               <PlayerLeaderCard title="Highest Awareness" players={allPlayers} valueKey="awareRating" />
             </div>
           </>
-        ) : (
-          <div className="bg-slate-900/40 rounded-xl border border-dashed border-slate-800 p-6 text-center text-sm text-slate-600 italic">
-            No roster exports saved yet for this league — player leaders will appear once rosters are exported.
-          </div>
         )}
       </div>
     </div>
